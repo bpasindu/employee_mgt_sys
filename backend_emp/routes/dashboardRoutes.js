@@ -25,7 +25,7 @@ router.get('/dashboard/summary', async (req, res) => {
       const todayEntry = entries[0] ? entries[0].work_description : '';
 
       const [balances] = await pool.query('SELECT * FROM leave_balances WHERE user_id = 1');
-      const balance = balances[0] || { total_days: 24, used_days: 10 };
+      const balance = balances[0] || { total_days: 24, used_days: 0 };
       const available_days = balance.total_days - balance.used_days;
 
       const [leaves] = await pool.query(
@@ -158,14 +158,8 @@ router.post('/leave/apply', async (req, res) => {
     if (getIsDbConnected()) {
       await pool.query(
         `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, days_count, status, reason)
-         VALUES (1, ?, ?, ?, ?, 'Approved', ?)`,
+         VALUES (1, ?, ?, ?, ?, 'Pending', ?)`,
         [leave_type, start_date, end_date, days, reason || '']
-      );
-
-      // Update used days in balance
-      await pool.query(
-        'UPDATE leave_balances SET used_days = used_days + ? WHERE user_id = 1',
-        [days]
       );
     } else {
       const newLeave = {
@@ -175,12 +169,24 @@ router.post('/leave/apply', async (req, res) => {
         start_date,
         end_date,
         days_count: days,
-        status: 'Approved',
+        status: 'Pending',
         reason: reason || '',
         created_at: new Date().toISOString()
       };
       memoryStore.leaveRequests.unshift(newLeave);
-      memoryStore.leaveBalance.used_days += days;
+
+      // Also add to admin pending requests queue
+      memoryStore.pendingLeaveRequests.unshift({
+        id: newLeave.id,
+        employee_name: memoryStore.user.name || 'Employee',
+        leave_type,
+        from_date: start_date,
+        to_date: end_date,
+        duration: `${days} ${days === 1 ? 'Day' : 'Days'}`,
+        reason: reason || 'Personal',
+        applied_date: new Date().toISOString().split('T')[0],
+        status: 'Pending'
+      });
     }
 
     res.json({ message: 'Leave request submitted successfully' });

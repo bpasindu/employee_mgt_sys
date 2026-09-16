@@ -152,15 +152,15 @@ export default function LoginPage({ onLoginSuccess }) {
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-white font-bold text-xl leading-tight tracking-tight">PeopleOps</h1>
-            <p className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider">Work Management</p>
+            <h1 className="text-white font-bold text-xl leading-tight tracking-tight">P W Holdings</h1>
+            <p className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider">Employee Management</p>
           </div>
         </div>
 
         {/* Middle Headline */}
         <div className="my-10 lg:my-0 z-10">
           <div className="bg-blue-900/60 border border-blue-400/30 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl inline-flex items-center gap-1.5 mb-6 backdrop-blur-xs w-fit">
-            <Sparkles className="w-3.5 h-3.5 text-blue-300" />
+            {/* <Sparkles className="w-3.5 h-3.5 text-blue-300" /> */}
             <span>People operations, made clear</span>
           </div>
 
@@ -171,7 +171,7 @@ export default function LoginPage({ onLoginSuccess }) {
 
         {/* Bottom Ambient Footer */}
         <div className="text-xs text-blue-200/70 font-medium z-10">
-          © 2026 P W Holdings · PeopleOps Platform
+          © 2026 P W Holdings
         </div>
 
         <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
@@ -202,41 +202,12 @@ export default function LoginPage({ onLoginSuccess }) {
               Employee Management System
             </p>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight">
-              Welcome back
+              Welcome
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 mt-1 mb-8">
               Sign in with your account to explore your workspace.
             </p>
 
-            {/* Quick Demo Pill Helper */}
-            <div className="mb-8 p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5">
-                Quick Demo Accounts (Click to Fill):
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoFill('admin1@pwholdings.lk', '123')}
-                  className="bg-blue-900 text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl hover:bg-blue-950 transition-colors shadow-2xs cursor-pointer"
-                >
-                  Admin 1 (admin1@pwholdings.lk)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoFill('admin2@pwholdings.lk', '123')}
-                  className="bg-blue-800 text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl hover:bg-blue-900 transition-colors shadow-2xs cursor-pointer"
-                >
-                  Admin 2 (admin2@pwholdings.lk)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoFill('kasun.p@company.com', '123')}
-                  className="bg-slate-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl hover:bg-slate-800 transition-colors shadow-2xs cursor-pointer"
-                >
-                  Employee (Kasun)
-                </button>
-              </div>
-            </div>
 
             {/* Sign In Form */}
             <form onSubmit={handleSignIn} className="space-y-5">
@@ -251,7 +222,7 @@ export default function LoginPage({ onLoginSuccess }) {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@company.com"
+                    placeholder="you@pwholdings.lk"
                     className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
                   />
                 </div>
@@ -368,7 +339,7 @@ export default function LoginPage({ onLoginSuccess }) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  placeholder="you@pwholdings.lk"
                   className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
@@ -395,12 +366,9 @@ export default function LoginPage({ onLoginSuccess }) {
                   >
                     <option value="IT">IT</option>
                     <option value="Finance">Finance</option>
-                    <option value="Operations">Operations</option>
-                    <option value="HR">HR</option>
-                    <option value="Marketing">Marketing</option>
                   </select>
                 </div>
-                <div>
+                {/* <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Position</label>
                   <input
                     type="text"
@@ -410,7 +378,7 @@ export default function LoginPage({ onLoginSuccess }) {
                     placeholder="e.g. Software Engineer"
                     className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
-                </div>
+                </div> */}
               </div>
 
               <button

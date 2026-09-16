@@ -51,9 +51,24 @@ router.post('/leave/approve', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Request ID is required' });
 
   try {
-    const reqItem = memoryStore.pendingLeaveRequests.find(r => r.id === Number(id));
-    if (reqItem) {
-      reqItem.status = 'Approved';
+    if (getIsDbConnected()) {
+      const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
+      if (rows.length > 0) {
+        const lReq = rows[0];
+        await pool.query('UPDATE leave_requests SET status = "Approved" WHERE id = ?', [id]);
+        await pool.query('UPDATE leave_balances SET used_days = used_days + ? WHERE user_id = ?', [lReq.days_count, lReq.user_id]);
+      }
+    } else {
+      const reqItem = memoryStore.pendingLeaveRequests.find(r => r.id === Number(id));
+      if (reqItem) {
+        reqItem.status = 'Approved';
+      }
+      const userLeave = memoryStore.leaveRequests.find(l => l.id === Number(id));
+      if (userLeave) {
+        userLeave.status = 'Approved';
+        const days = Number(userLeave.days_count) || 1;
+        memoryStore.leaveBalance.used_days += days;
+      }
     }
 
     res.json({ message: 'Leave request approved successfully', id });
@@ -69,9 +84,17 @@ router.post('/leave/reject', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Request ID is required' });
 
   try {
-    const reqItem = memoryStore.pendingLeaveRequests.find(r => r.id === Number(id));
-    if (reqItem) {
-      reqItem.status = 'Rejected';
+    if (getIsDbConnected()) {
+      await pool.query('UPDATE leave_requests SET status = "Rejected" WHERE id = ?', [id]);
+    } else {
+      const reqItem = memoryStore.pendingLeaveRequests.find(r => r.id === Number(id));
+      if (reqItem) {
+        reqItem.status = 'Rejected';
+      }
+      const userLeave = memoryStore.leaveRequests.find(l => l.id === Number(id));
+      if (userLeave) {
+        userLeave.status = 'Rejected';
+      }
     }
 
     res.json({ message: 'Leave request rejected', id });

@@ -35,13 +35,13 @@ export default function App() {
 
   // Employee Dashboard State
   const [user, setUser] = useState({
-    name: 'Kasun Perera',
-    title: 'Software Engineer',
-    initials: 'KP',
+    name: '',
+    title: '',
+    initials: '',
     status: 'Working'
   });
-  const [todayWork, setTodayWork] = useState('Working on the customer dashboard UI');
-  const [leaveBalance, setLeaveBalance] = useState({ total_days: 24, used_days: 10, available_days: 14 });
+  const [todayWork, setTodayWork] = useState('');
+  const [leaveBalance, setLeaveBalance] = useState({ total_days: 24, used_days: 0, available_days: 24 });
   const [recentLeaveRequests, setRecentLeaveRequests] = useState([]);
   const [isApplyLeaveOpen, setIsApplyLeaveOpen] = useState(false);
 
