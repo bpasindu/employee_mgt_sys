@@ -1,0 +1,42 @@
+# Dependency directories (stops 1000+ node_modules files from being tracked)
+node_modules/
+**/node_modules/
+
+# Environment variable files (secrets & credentials)
+.env
+.env.local
+.env.*.local
+**/.env
+
+# Build & distribution output directories
+dist/
+dist-ssr/
+build/
+**/dist/
+
+# Logs & Debug outputs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE & Editor directories
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS metadata files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Package manager lock files / cache
+.cache/
+.eslintcache
