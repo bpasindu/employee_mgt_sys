@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, CalendarPlus } from 'lucide-react';
 
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
-  const [leaveType, setLeaveType] = useState('Annual Leave');
+  const [leaveType, setLeaveType] = useState('Casual Leave');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [daysCount, setDaysCount] = useState(1);
@@ -11,20 +11,32 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
 
   if (!isOpen) return null;
 
+  const resetForm = () => {
+    setLeaveType('Casual Leave');
+    setStartDate('');
+    setEndDate('');
+    setDaysCount(1);
+    setReason('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!startDate || !endDate) return;
 
     setIsSubmitting(true);
-    await onSubmitLeave({
-      leave_type: leaveType,
-      start_date: startDate,
-      end_date: endDate,
-      days_count: Number(daysCount) || 1,
-      reason
-    });
-    setIsSubmitting(false);
-    onClose();
+    try {
+      await onSubmitLeave({
+        leave_type: leaveType,
+        start_date: startDate,
+        end_date: endDate,
+        days_count: Number(daysCount) || 1,
+        reason
+      });
+      resetForm();
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -55,9 +67,9 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
               onChange={(e) => setLeaveType(e.target.value)}
               className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             >
-              <option value="Annual Leave">Annual Leave</option>
               <option value="Casual Leave">Casual Leave</option>
               <option value="Medical Leave">Medical Leave</option>
+              <option value="Study Leave">Study Leave</option>
             </select>
           </div>
 

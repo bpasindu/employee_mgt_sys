@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12)  return { text: 'Good Morning',   emoji: '☀️' };
+  if (hour >= 12 && hour < 17) return { text: 'Good Afternoon', emoji: '🌤️' };
+  if (hour >= 17 && hour < 21) return { text: 'Good Evening',   emoji: '🌆' };
+  return                                { text: 'Good Night',     emoji: '🌙' };
+}
+
 export default function GreetingBanner({ user, onUpdateStatus }) {
+  const { text: greetingText, emoji: greetingEmoji } = getGreeting();
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
 
   const formattedDate = new Intl.DateTimeFormat('en-US', {
@@ -22,7 +31,7 @@ export default function GreetingBanner({ user, onUpdateStatus }) {
 
       {/* Main Greeting */}
       <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1 mb-4 flex items-center gap-2">
-        Good Morning, {firstName} <span className="inline-block animate-bounce">👋</span>
+        {greetingText}, {firstName} <span className="inline-block animate-bounce">{greetingEmoji}</span>
       </h2>
 
       {/* Status Badge */}
