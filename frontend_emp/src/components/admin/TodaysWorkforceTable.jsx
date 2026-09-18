@@ -9,7 +9,6 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
 
   const filtered = workforce.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          emp.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           emp.today_work.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = departmentFilter === 'All departments' ||
                         emp.department.toLowerCase() === departmentFilter.toLowerCase();
@@ -61,8 +60,7 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
             <tr>
               <th className="px-6 py-3.5">Employee</th>
               <th className="px-6 py-3.5">Department</th>
-              <th className="px-6 py-3.5">Position</th>
-              <th className="px-6 py-3.5">Today's work</th>
+              <th className="px-6 py-3.5">Today's Work</th>
               <th className="px-6 py-3.5">Status</th>
               <th className="px-6 py-3.5">Updated</th>
               <th className="px-4 py-3.5 w-10"></th>
@@ -87,8 +85,11 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600 font-medium">{emp.department}</td>
-                  <td className="px-6 py-4 text-slate-700 font-medium max-w-[130px] truncate">{emp.position}</td>
-                  <td className="px-6 py-4 text-slate-800 font-normal max-w-xs truncate">{emp.today_work}</td>
+                  <td className="px-6 py-4 text-slate-800 font-normal max-w-xs truncate">
+                    {emp.today_work
+                      ? emp.today_work
+                      : <span className="text-slate-400 italic">No description yet</span>}
+                  </td>
                   <td className="px-6 py-4">
                     <span className="bg-emerald-50 text-emerald-600 border border-emerald-200/80 text-[11px] font-bold px-2.5 py-0.5 rounded-md">
                       {emp.status}

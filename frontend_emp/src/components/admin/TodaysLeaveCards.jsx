@@ -24,9 +24,7 @@ export default function TodaysLeaveCards({ leaves = [] }) {
                   </div>
                   <div>
                     <h4 className="font-bold text-slate-900 text-sm leading-tight">{item.name}</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      {item.department} · {item.position}
-                    </p>
+                      {item.department}
                   </div>
                 </div>
                 <span className="bg-rose-50 text-rose-600 border border-rose-200/80 text-[10px] font-bold px-2 py-1 rounded-md shrink-0">

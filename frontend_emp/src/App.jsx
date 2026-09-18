@@ -24,14 +24,20 @@ import TodaysLeaveCards from './components/admin/TodaysLeaveCards';
 import HalfDayAndStudyLeave from './components/admin/HalfDayAndStudyLeave';
 import PendingLeaveRequestsTable from './components/admin/PendingLeaveRequestsTable';
 import AdminAllEmployeesView from './components/admin/AdminAllEmployeesView';
+import AdminWorkActivityView from './components/admin/AdminWorkActivityView';
 
 export default function App() {
   // Navigation View: 'login' | 'admin' | 'employee'
   const [currentView, setCurrentView] = useState('login');
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Logged in User State
-  const [currentUser, setCurrentUser] = useState(null);
+  // Logged in User State — restored from localStorage on mount
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('emp_mgt_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
 
   // Employee Dashboard State
   const [user, setUser] = useState({
@@ -66,11 +72,27 @@ export default function App() {
   const [studyLeaveEmployees, setStudyLeaveEmployees] = useState([]);
   const [pendingLeaveRequests, setPendingLeaveRequests] = useState([]);
 
+  // On mount: if a saved session exists, restore the correct view
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.role === 'Admin') {
+        setAdminUser(currentUser);
+        setCurrentView('admin');
+        setActiveTab('admin-dashboard');
+      } else {
+        setUser(prev => ({ ...prev, ...currentUser }));
+        setCurrentView('employee');
+        setActiveTab('dashboard');
+        fetchEmployeeSummary(currentUser.id);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (currentView === 'admin') {
       fetchAdminSummary();
-    } else if (currentView === 'employee') {
-      fetchEmployeeSummary();
+    } else if (currentView === 'employee' && currentUser?.id) {
+      fetchEmployeeSummary(currentUser.id);
     }
   }, [currentView]);
 
@@ -91,11 +113,13 @@ export default function App() {
     }
   };
 
-  const fetchEmployeeSummary = async () => {
+  const fetchEmployeeSummary = async (userId) => {
+    const uid = userId || currentUser?.id;
+    if (!uid) return;
     try {
-      const res = await API.get('/dashboard/summary');
+      const res = await API.get(`/dashboard/summary?user_id=${uid}`);
       if (res.data) {
-        if (res.data.user && (!currentUser || currentUser.role !== 'Employee')) setUser(res.data.user);
+        if (res.data.user) setUser(prev => ({ ...prev, ...res.data.user }));
         if (res.data.todayWork !== undefined) setTodayWork(res.data.todayWork);
         if (res.data.leaveBalance) setLeaveBalance(res.data.leaveBalance);
         if (res.data.recentLeaveRequests) setRecentLeaveRequests(res.data.recentLeaveRequests);
@@ -108,6 +132,7 @@ export default function App() {
   // Auth Handlers
   const handleLoginSuccess = (loggedInUser) => {
     setCurrentUser(loggedInUser);
+    localStorage.setItem('emp_mgt_user', JSON.stringify(loggedInUser));
     if (loggedInUser.role === 'Admin') {
       setAdminUser(loggedInUser);
       setCurrentView('admin');
@@ -116,11 +141,13 @@ export default function App() {
       setUser(loggedInUser);
       setCurrentView('employee');
       setActiveTab('dashboard');
+      fetchEmployeeSummary(loggedInUser.id);
     }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('emp_mgt_user');
     setCurrentView('login');
   };
 
@@ -145,8 +172,9 @@ export default function App() {
 
   // Employee Actions
   const handleSaveWork = async (newDescription) => {
+    if (!currentUser?.id) return;
     try {
-      await API.post('/work-entry', { work_description: newDescription });
+      await API.post('/work-entry', { user_id: currentUser.id, work_description: newDescription });
       setTodayWork(newDescription);
     } catch (err) {
       console.error('Failed to save work entry:', err);
@@ -154,18 +182,21 @@ export default function App() {
   };
 
   const handleSubmitLeave = async (leaveData) => {
+    if (!currentUser?.id) return;
     try {
-      await API.post('/leave/apply', leaveData);
-      await fetchEmployeeSummary();
+      await API.post('/leave/apply', { ...leaveData, user_id: currentUser.id });
+      await fetchEmployeeSummary(currentUser.id);
     } catch (err) {
       console.error('Failed to submit leave:', err);
+      throw err;
     }
   };
 
   const handleUpdateStatus = async (newStatus) => {
+    if (!currentUser?.id) return;
     try {
       setUser(prev => ({ ...prev, status: newStatus }));
-      await API.patch('/user/status', { status: newStatus });
+      await API.patch('/user/status', { user_id: currentUser.id, status: newStatus });
     } catch (err) {
       console.error('Failed to update status:', err);
     }
@@ -262,7 +293,9 @@ export default function App() {
               </div>
             )}
 
-            {(activeTab === 'work-activity' || activeTab === 'leave-calendar' || activeTab === 'settings') && (
+            {activeTab === 'work-activity' && <AdminWorkActivityView />}
+
+            {(activeTab === 'leave-calendar' || activeTab === 'settings') && (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-xs max-w-4xl mx-auto">
                 <h3 className="text-lg font-bold text-slate-800 capitalize">{adminTitles[activeTab]}</h3>
                 <p className="text-xs text-slate-500 mt-1">This section is active and configured for system administration.</p>
@@ -289,6 +322,7 @@ export default function App() {
         <Header
           title={employeeTitles[activeTab] || 'Dashboard'}
           user={user}
+          onToggleViewMode={currentUser?.role === 'Admin' ? toggleViewMode : undefined}
         />
 
         <main className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto">
@@ -305,10 +339,10 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'work-history' && <WorkHistoryView />}
+          {activeTab === 'work-history' && <WorkHistoryView userId={currentUser?.id} />}
 
           {activeTab === 'leave-history' && (
-            <LeaveHistoryView onOpenApplyLeave={() => setIsApplyLeaveOpen(true)} />
+            <LeaveHistoryView userId={currentUser?.id} onOpenApplyLeave={() => setIsApplyLeaveOpen(true)} />
           )}
         </main>
       </div>

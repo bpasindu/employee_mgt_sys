@@ -57,36 +57,39 @@ export default function HalfDayAndStudyLeave({ halfDayList = [], studyLeaveList 
           <h3 className="text-lg font-bold text-slate-900">Study Leave</h3>
           <p className="text-xs text-slate-500 mt-0.5 mb-5">Approved study time for today</p>
 
-          {!studyLeave ? (
+          {studyLeaveList.length === 0 ? (
             <div className="py-6 text-center text-slate-400 text-xs font-medium bg-slate-50/50 rounded-2xl border border-slate-100">
               No employees on study leave today.
             </div>
           ) : (
-            <div className="bg-[#eaf4fd] border border-blue-200/70 rounded-2xl p-6 relative overflow-hidden">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border border-blue-200 shrink-0">
-                    {studyLeave.initials}
+            <div className="space-y-4">
+              {studyLeaveList.map((studyLeave) => (
+                <div key={studyLeave.id || Math.random()} className="bg-[#eaf4fd] border border-blue-200/70 rounded-2xl p-6 relative overflow-hidden">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border border-blue-200 shrink-0">
+                        {studyLeave.initials}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-base">{studyLeave.name}</h4>
+                        <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                          {studyLeave.department}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-bold px-2.5 py-1 rounded-md">
+                      Study Leave
+                    </span>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 text-base">{studyLeave.name}</h4>
-                    <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                      {studyLeave.department} · {studyLeave.position}
-                    </p>
-                  </div>
-                </div>
-                <span className="bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-bold px-2.5 py-1 rounded-md">
-                  Study Leave
-                </span>
-              </div>
 
-              {studyLeave.time_slot && (
-                <div className="text-sm font-extrabold text-blue-900 flex items-center gap-2 my-3">
-                  <Clock className="w-4 h-4 text-blue-600" />
-                  <span>{studyLeave.time_slot}</span>
+                  {studyLeave.duration && (
+                    <div className="text-xs font-bold text-blue-900 flex items-center gap-2 my-2">
+                      <span>Duration: {studyLeave.duration}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-600 font-medium">Reason: {studyLeave.reason || 'Examination'}</p>
                 </div>
-              )}
-              <p className="text-xs text-slate-600 font-medium">{studyLeave.reason || 'Examination'}</p>
+              ))}
             </div>
           )}
         </div>

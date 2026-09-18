@@ -27,7 +27,6 @@ export default function AdminAllEmployeesView() {
 
   const filtered = employees.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          emp.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           emp.department.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = deptFilter === 'All departments' ||
                         emp.department.toLowerCase() === deptFilter.toLowerCase();
@@ -38,8 +37,8 @@ export default function AdminAllEmployeesView() {
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">All Workforce Employees (20)</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Manage company employees across all departments and positions.</p>
+          <h2 className="text-xl font-bold text-slate-900">All Workforce Employees ({employees.length})</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Manage company employees across all departments.</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -78,9 +77,8 @@ export default function AdminAllEmployeesView() {
               <tr>
                 <th className="px-6 py-3.5">Employee</th>
                 <th className="px-6 py-3.5">Department</th>
-                <th className="px-6 py-3.5">Position</th>
                 <th className="px-6 py-3.5">Today's Status</th>
-                <th className="px-6 py-3.5">Work Details / Time</th>
+                <th className="px-6 py-3.5">Work Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -95,7 +93,6 @@ export default function AdminAllEmployeesView() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600 font-semibold">{emp.department}</td>
-                  <td className="px-6 py-4 text-slate-700 font-medium">{emp.position}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${
                       emp.status === 'Working'
@@ -110,7 +107,7 @@ export default function AdminAllEmployeesView() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-600 max-w-sm truncate">
-                    {emp.today_work || emp.time_slot || emp.leave_type || 'N/A'}
+                    {emp.today_work || 'N/A'}
                   </td>
                 </tr>
               ))}

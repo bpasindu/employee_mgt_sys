@@ -2,17 +2,17 @@ import React, { useState, useEffect } from 'react';
 import API from '../api';
 import { ClipboardList, Plus } from 'lucide-react';
 
-export default function LeaveHistoryView({ onOpenApplyLeave }) {
+export default function LeaveHistoryView({ userId, onOpenApplyLeave }) {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchLeaveHistory();
-  }, []);
+    if (userId) fetchLeaveHistory();
+  }, [userId]);
 
   const fetchLeaveHistory = async () => {
     try {
-      const res = await API.get('/leave/history');
+      const res = await API.get(`/leave/history?user_id=${userId}`);
       setLeaves(res.data || []);
     } catch (err) {
       console.error('Failed to fetch leave history:', err);

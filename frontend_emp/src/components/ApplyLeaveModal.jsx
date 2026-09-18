@@ -3,6 +3,7 @@ import { X, CalendarPlus } from 'lucide-react';
 
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
   const [leaveType, setLeaveType] = useState('Casual Leave');
+  const [durationOption, setDurationOption] = useState('Full Day'); // 'Full Day' | 'Half Day'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [daysCount, setDaysCount] = useState(1);
@@ -13,10 +14,31 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
 
   const resetForm = () => {
     setLeaveType('Casual Leave');
+    setDurationOption('Full Day');
     setStartDate('');
     setEndDate('');
     setDaysCount(1);
     setReason('');
+  };
+
+  const handleLeaveTypeChange = (newType) => {
+    setLeaveType(newType);
+    if (newType === 'Half Day') {
+      setDurationOption('Half Day');
+      setDaysCount(0.5);
+    } else if (durationOption === 'Half Day' && newType !== 'Casual Leave' && newType !== 'Medical Leave') {
+      setDurationOption('Full Day');
+      setDaysCount(1);
+    }
+  };
+
+  const handleDurationChange = (option) => {
+    setDurationOption(option);
+    if (option === 'Half Day') {
+      setDaysCount(0.5);
+    } else {
+      setDaysCount(1);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -25,12 +47,16 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
 
     setIsSubmitting(true);
     try {
+      const finalLeaveType = (leaveType === 'Casual Leave' || leaveType === 'Medical Leave') && durationOption === 'Half Day' 
+        ? 'Half Day' 
+        : leaveType;
+
       await onSubmitLeave({
-        leave_type: leaveType,
+        leave_type: finalLeaveType,
         start_date: startDate,
         end_date: endDate,
         days_count: Number(daysCount) || 1,
-        reason
+        reason: durationOption === 'Half Day' ? `[Half Day ${leaveType}] ${reason}`.trim() : reason
       });
       resetForm();
       onClose();
@@ -38,6 +64,8 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
       setIsSubmitting(false);
     }
   };
+
+  const showDurationToggle = leaveType === 'Casual Leave' || leaveType === 'Medical Leave' || leaveType === 'Half Day';
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 select-none">
@@ -64,14 +92,46 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
             <label className="block text-xs font-semibold text-slate-700 mb-1">Leave Type</label>
             <select
               value={leaveType}
-              onChange={(e) => setLeaveType(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              onChange={(e) => handleLeaveTypeChange(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
             >
               <option value="Casual Leave">Casual Leave</option>
               <option value="Medical Leave">Medical Leave</option>
+              <option value="Half Day">Half Day</option>
               <option value="Study Leave">Study Leave</option>
             </select>
           </div>
+
+          {/* Duration Toggle (Full Day / Half Day) */}
+          {showDurationToggle && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Leave Duration</label>
+              <div className="grid grid-cols-2 gap-2 bg-slate-100/80 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => handleDurationChange('Full Day')}
+                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    durationOption === 'Full Day'
+                      ? 'bg-white text-blue-600 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  ☀️ Full Day (1.0)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDurationChange('Half Day')}
+                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    durationOption === 'Half Day'
+                      ? 'bg-white text-amber-600 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🌓 Half Day (0.5)
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -81,7 +141,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
                 required
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
               />
             </div>
             <div>
@@ -91,7 +151,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
                 required
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
               />
             </div>
           </div>
@@ -100,11 +160,12 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
             <label className="block text-xs font-semibold text-slate-700 mb-1">Total Days</label>
             <input
               type="number"
-              min="1"
+              step="0.5"
+              min="0.5"
               max="30"
               value={daysCount}
               onChange={(e) => setDaysCount(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
             />
           </div>
 
@@ -115,7 +176,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Brief reason for your leave request..."
-              className="w-full border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+              className="w-full border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none font-medium"
             />
           </div>
 

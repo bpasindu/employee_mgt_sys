@@ -1,7 +1,7 @@
 import React from 'react';
-import { Search, Bell, ChevronDown } from 'lucide-react';
+import { Search, Bell, ChevronDown, ShieldCheck } from 'lucide-react';
 
-export default function Header({ title, user }) {
+export default function Header({ title, user, onToggleViewMode }) {
   // Format current or display date matching screenshot: "Monday, September 14, 2026"
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
@@ -18,8 +18,20 @@ export default function Header({ title, user }) {
         <p className="text-xs text-slate-500 font-medium mt-0.5">{formattedDate}</p>
       </div>
 
-      {/* Search, Notifications & User Avatar */}
+      {/* Right Controls */}
       <div className="flex items-center gap-4">
+        {/* Switch to Admin button — only shown if the logged-in user is an Admin */}
+        {onToggleViewMode && (
+          <button
+            onClick={onToggleViewMode}
+            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
+            title="Switch to Admin Dashboard"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+            <span>Employee Mode</span>
+            <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-md font-bold ml-1">Switch to Admin</span>
+          </button>
+        )}
         {/* Search Bar */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />

@@ -1,61 +1,13 @@
 const pool = require('./db');
 
-// In-memory fallback store if MySQL connection is unavailable
+// Minimal fallback store — no mock data
 const memoryStore = {
-  // System Admins
-  admins: [
-    {
-      id: 100,
-      name: 'Nadeesha Silva',
-      title: 'System Administrator',
-      email: 'admin1@pwholdings.lk',
-      password: '123',
-      initials: 'NS',
-      role: 'Admin'
-    },
-    {
-      id: 101,
-      name: 'System Admin 2',
-      title: 'IT Administrator',
-      email: 'admin2@pwholdings.lk',
-      password: '123',
-      initials: 'SA',
-      role: 'Admin'
-    }
-  ],
-
-  // Employee profile placeholder (populated upon sign in / registration)
-  user: {
-    id: 1,
-    name: '',
-    title: '',
-    department: 'IT',
-    email: '',
-    password: '',
-    initials: '',
-    status: 'Working',
-    role: 'Employee'
-  },
-
-  // Registered Employees database
-  allEmployees: [],
-
-  // Pending Leave Requests for Admin review
-  pendingLeaveRequests: [],
-
-  // Daily work log entries
+  user: { id: null, name: '', title: '', department: 'IT', email: '', initials: '', status: 'Working', role: 'Employee' },
   workEntries: [],
-
-  // Clean initial leave balance
-  leaveBalance: {
-    user_id: 1,
-    total_days: 24,
-    used_days: 0,
-    available_days: 24
-  },
-
-  // Leave requests list
-  leaveRequests: []
+  leaveBalance: { user_id: null, total_days: 24, used_days: 0, available_days: 24 },
+  leaveRequests: [],
+  allEmployees: [],
+  pendingLeaveRequests: []
 };
 
 let isDbConnected = false;
@@ -66,12 +18,11 @@ async function initDatabase() {
     isDbConnected = true;
     console.log('Connected to MySQL Database successfully.');
 
-    // Create users table with password & role
+    // Create users table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        title VARCHAR(100) NOT NULL,
         department VARCHAR(100) DEFAULT 'IT',
         email VARCHAR(100) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL DEFAULT '123',
@@ -122,27 +73,8 @@ async function initDatabase() {
       )
     `);
 
-    // Seed Admin 1
-    const [admin1] = await connection.query('SELECT * FROM users WHERE email = ?', ['admin1@pwholdings.lk']);
-    if (admin1.length === 0) {
-      await connection.query(`
-        INSERT INTO users (name, title, department, email, password, initials, status, role)
-        VALUES ('Nadeesha Silva', 'System Administrator', 'IT', 'admin1@pwholdings.lk', '123', 'NS', 'Working', 'Admin')
-      `);
-      console.log('Seeded System Admin 1: admin1@pwholdings.lk');
-    }
-
-    // Seed Admin 2
-    const [admin2] = await connection.query('SELECT * FROM users WHERE email = ?', ['admin2@pwholdings.lk']);
-    if (admin2.length === 0) {
-      await connection.query(`
-        INSERT INTO users (name, title, department, email, password, initials, status, role)
-        VALUES ('System Admin 2', 'IT Administrator', 'IT', 'admin2@pwholdings.lk', '123', 'SA', 'Working', 'Admin')
-      `);
-      console.log('Seeded System Admin 2: admin2@pwholdings.lk');
-    }
-
     connection.release();
+    console.log('All tables verified/created successfully.');
   } catch (err) {
     isDbConnected = false;
     console.warn('MySQL Connection Warning:', err.message);

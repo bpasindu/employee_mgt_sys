@@ -2,17 +2,17 @@ import React, { useState, useEffect } from 'react';
 import API from '../api';
 import { Briefcase, Calendar, Clock } from 'lucide-react';
 
-export default function WorkHistoryView() {
+export default function WorkHistoryView({ userId }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    if (userId) fetchHistory();
+  }, [userId]);
 
   const fetchHistory = async () => {
     try {
-      const res = await API.get('/work-entry/history');
+      const res = await API.get(`/work-entry/history?user_id=${userId}`);
       setEntries(res.data || []);
     } catch (err) {
       console.error('Failed to fetch work history:', err);

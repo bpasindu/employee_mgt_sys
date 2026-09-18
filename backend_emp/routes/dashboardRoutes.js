@@ -8,45 +8,41 @@ function getTodayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-// GET /api/dashboard/summary
+// GET /api/dashboard/summary?user_id=X
 router.get('/dashboard/summary', async (req, res) => {
+  const userId = parseInt(req.query.user_id);
+  if (!userId) return res.status(400).json({ error: 'user_id is required' });
+
   try {
     const todayStr = getTodayStr();
 
     if (getIsDbConnected()) {
-      // Fetch from MySQL
-      const [users] = await pool.query('SELECT * FROM users WHERE id = 1');
-      const user = users[0] || memoryStore.user;
+      const [users] = await pool.query(
+        'SELECT id, name, email, initials, status, department FROM users WHERE id = ?',
+        [userId]
+      );
+      if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+      const user = users[0];
 
       const [entries] = await pool.query(
-        'SELECT * FROM daily_work_entries WHERE user_id = 1 AND entry_date = ? ORDER BY created_at DESC LIMIT 1',
-        [todayStr]
+        'SELECT work_description FROM daily_work_entries WHERE user_id = ? AND entry_date = ? ORDER BY created_at DESC LIMIT 1',
+        [userId, todayStr]
       );
       const todayEntry = entries[0] ? entries[0].work_description : '';
 
-      const [balances] = await pool.query('SELECT * FROM leave_balances WHERE user_id = 1');
+      const [balances] = await pool.query('SELECT * FROM leave_balances WHERE user_id = ?', [userId]);
       const balance = balances[0] || { total_days: 24, used_days: 0 };
       const available_days = balance.total_days - balance.used_days;
 
       const [leaves] = await pool.query(
-        'SELECT * FROM leave_requests WHERE user_id = 1 ORDER BY created_at DESC LIMIT 5'
+        'SELECT * FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
+        [userId]
       );
 
       return res.json({
-        user: {
-          id: user.id,
-          name: user.name,
-          title: user.title,
-          email: user.email,
-          initials: user.initials,
-          status: user.status
-        },
+        user: { id: user.id, name: user.name, title: user.title, email: user.email, initials: user.initials, status: user.status },
         todayWork: todayEntry,
-        leaveBalance: {
-          total_days: balance.total_days,
-          used_days: balance.used_days,
-          available_days: available_days
-        },
+        leaveBalance: { total_days: balance.total_days, used_days: balance.used_days, available_days },
         recentLeaveRequests: leaves.map(l => ({
           id: l.id,
           leave_type: l.leave_type,
@@ -58,17 +54,12 @@ router.get('/dashboard/summary', async (req, res) => {
         }))
       });
     } else {
-      // Return from memoryStore
       const todayEntryObj = memoryStore.workEntries.find(e => e.entry_date === todayStr);
       const available_days = memoryStore.leaveBalance.total_days - memoryStore.leaveBalance.used_days;
-
       return res.json({
         user: memoryStore.user,
-        todayWork: todayEntryObj ? todayEntryObj.work_description : (memoryStore.workEntries[0]?.work_description || ''),
-        leaveBalance: {
-          ...memoryStore.leaveBalance,
-          available_days
-        },
+        todayWork: todayEntryObj ? todayEntryObj.work_description : '',
+        leaveBalance: { ...memoryStore.leaveBalance, available_days },
         recentLeaveRequests: memoryStore.leaveRequests
       });
     }
@@ -80,18 +71,17 @@ router.get('/dashboard/summary', async (req, res) => {
 
 // POST /api/work-entry - Save or update today's work description
 router.post('/work-entry', async (req, res) => {
-  const { work_description } = req.body;
-  if (typeof work_description !== 'string') {
-    return res.status(400).json({ error: 'work_description is required' });
-  }
+  const { user_id, work_description } = req.body;
+  if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+  if (typeof work_description !== 'string') return res.status(400).json({ error: 'work_description is required' });
 
   const todayStr = getTodayStr();
 
   try {
     if (getIsDbConnected()) {
       const [existing] = await pool.query(
-        'SELECT id FROM daily_work_entries WHERE user_id = 1 AND entry_date = ?',
-        [todayStr]
+        'SELECT id FROM daily_work_entries WHERE user_id = ? AND entry_date = ?',
+        [user_id, todayStr]
       );
 
       if (existing.length > 0) {
@@ -101,22 +91,16 @@ router.post('/work-entry', async (req, res) => {
         );
       } else {
         await pool.query(
-          'INSERT INTO daily_work_entries (user_id, entry_date, work_description) VALUES (1, ?, ?)',
-          [todayStr, work_description]
+          'INSERT INTO daily_work_entries (user_id, entry_date, work_description) VALUES (?, ?, ?)',
+          [user_id, todayStr, work_description]
         );
       }
     } else {
-      const existing = memoryStore.workEntries.find(e => e.entry_date === todayStr);
+      const existing = memoryStore.workEntries.find(e => e.entry_date === todayStr && e.user_id === user_id);
       if (existing) {
         existing.work_description = work_description;
       } else {
-        memoryStore.workEntries.unshift({
-          id: Date.now(),
-          user_id: 1,
-          entry_date: todayStr,
-          work_description,
-          created_at: new Date().toISOString()
-        });
+        memoryStore.workEntries.unshift({ id: Date.now(), user_id, entry_date: todayStr, work_description, created_at: new Date().toISOString() });
       }
     }
 
@@ -127,16 +111,20 @@ router.post('/work-entry', async (req, res) => {
   }
 });
 
-// GET /api/work-entry/history - Get all past work entries
+// GET /api/work-entry/history?user_id=X
 router.get('/work-entry/history', async (req, res) => {
+  const userId = parseInt(req.query.user_id);
+  if (!userId) return res.status(400).json({ error: 'user_id is required' });
+
   try {
     if (getIsDbConnected()) {
       const [rows] = await pool.query(
-        'SELECT * FROM daily_work_entries WHERE user_id = 1 ORDER BY entry_date DESC'
+        'SELECT * FROM daily_work_entries WHERE user_id = ? ORDER BY entry_date DESC',
+        [userId]
       );
       res.json(rows);
     } else {
-      res.json(memoryStore.workEntries);
+      res.json(memoryStore.workEntries.filter(e => e.user_id === userId));
     }
   } catch (err) {
     console.error('Error fetching work history:', err);
@@ -144,12 +132,12 @@ router.get('/work-entry/history', async (req, res) => {
   }
 });
 
-// POST /api/leave/apply - Apply for new leave
+// POST /api/leave/apply
 router.post('/leave/apply', async (req, res) => {
-  const { leave_type, start_date, end_date, days_count, reason } = req.body;
+  const { user_id, leave_type, start_date, end_date, days_count, reason } = req.body;
 
-  if (!leave_type || !start_date || !end_date) {
-    return res.status(400).json({ error: 'leave_type, start_date, and end_date are required' });
+  if (!user_id || !leave_type || !start_date || !end_date) {
+    return res.status(400).json({ error: 'user_id, leave_type, start_date, and end_date are required' });
   }
 
   const days = Number(days_count) || 1;
@@ -158,37 +146,16 @@ router.post('/leave/apply', async (req, res) => {
     if (getIsDbConnected()) {
       await pool.query(
         `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, days_count, status, reason)
-         VALUES (1, ?, ?, ?, ?, 'Pending', ?)`,
-        [leave_type, start_date, end_date, days, reason || '']
+         VALUES (?, ?, ?, ?, ?, 'Pending', ?)`,
+        [user_id, leave_type, start_date, end_date, days, reason || '']
       );
     } else {
-      const newLeave = {
-        id: Date.now(),
-        user_id: 1,
-        leave_type,
-        start_date,
-        end_date,
-        days_count: days,
-        status: 'Pending',
-        reason: reason || '',
+      memoryStore.leaveRequests.unshift({
+        id: Date.now(), user_id, leave_type, start_date, end_date,
+        days_count: days, status: 'Pending', reason: reason || '',
         created_at: new Date().toISOString()
-      };
-      memoryStore.leaveRequests.unshift(newLeave);
-
-      // Also add to admin pending requests queue
-      memoryStore.pendingLeaveRequests.unshift({
-        id: newLeave.id,
-        employee_name: memoryStore.user.name || 'Employee',
-        leave_type,
-        from_date: start_date,
-        to_date: end_date,
-        duration: `${days} ${days === 1 ? 'Day' : 'Days'}`,
-        reason: reason || 'Personal',
-        applied_date: new Date().toISOString().split('T')[0],
-        status: 'Pending'
       });
     }
-
     res.json({ message: 'Leave request submitted successfully' });
   } catch (err) {
     console.error('Error submitting leave request:', err);
@@ -196,16 +163,20 @@ router.post('/leave/apply', async (req, res) => {
   }
 });
 
-// GET /api/leave/history - Fetch leave requests
+// GET /api/leave/history?user_id=X
 router.get('/leave/history', async (req, res) => {
+  const userId = parseInt(req.query.user_id);
+  if (!userId) return res.status(400).json({ error: 'user_id is required' });
+
   try {
     if (getIsDbConnected()) {
       const [leaves] = await pool.query(
-        'SELECT * FROM leave_requests WHERE user_id = 1 ORDER BY created_at DESC'
+        'SELECT * FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
       );
       res.json(leaves);
     } else {
-      res.json(memoryStore.leaveRequests);
+      res.json(memoryStore.leaveRequests.filter(l => l.user_id === userId));
     }
   } catch (err) {
     console.error('Error fetching leave history:', err);
@@ -213,14 +184,14 @@ router.get('/leave/history', async (req, res) => {
   }
 });
 
-// PATCH /api/user/status - Update working status
+// PATCH /api/user/status
 router.patch('/user/status', async (req, res) => {
-  const { status } = req.body;
-  if (!status) return res.status(400).json({ error: 'Status is required' });
+  const { user_id, status } = req.body;
+  if (!user_id || !status) return res.status(400).json({ error: 'user_id and status are required' });
 
   try {
     if (getIsDbConnected()) {
-      await pool.query('UPDATE users SET status = ? WHERE id = 1', [status]);
+      await pool.query('UPDATE users SET status = ? WHERE id = ?', [status, user_id]);
     } else {
       memoryStore.user.status = status;
     }

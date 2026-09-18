@@ -26,7 +26,7 @@ router.post('/login', async (req, res) => {
   try {
     if (getIsDbConnected()) {
       const [rows] = await pool.query(
-        'SELECT id, name, title, department, email, password, initials, status, role FROM users WHERE LOWER(email) = ?',
+        'SELECT id, name, department, email, password, initials, status, role FROM users WHERE LOWER(email) = ?',
         [cleanEmail]
       );
 
@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
 
 // POST /api/auth/register-employee - Register new employee
 router.post('/register-employee', async (req, res) => {
-  const { name, email, password, position, department } = req.body;
+  const { name, email, password, department } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -76,7 +76,6 @@ router.post('/register-employee', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
   const initials = getInitials(name);
   const dept = department || 'IT';
-  const pos = position || 'Software Engineer';
 
   try {
     if (getIsDbConnected()) {
@@ -87,9 +86,9 @@ router.post('/register-employee', async (req, res) => {
       }
 
       const [result] = await pool.query(
-        `INSERT INTO users (name, title, department, email, password, initials, status, role)
-         VALUES (?, ?, ?, ?, ?, ?, 'Working', 'Employee')`,
-        [name, pos, dept, cleanEmail, password, initials]
+        `INSERT INTO users (name, department, email, password, initials, status, role)
+         VALUES (?, ?, ?, ?, ?, 'Working', 'Employee')`,
+        [name, dept, cleanEmail, password, initials]
       );
 
       const newUserId = result.insertId;
@@ -103,7 +102,6 @@ router.post('/register-employee', async (req, res) => {
       const newUser = {
         id: newUserId,
         name,
-        title: pos,
         department: dept,
         email: cleanEmail,
         initials,
@@ -122,8 +120,6 @@ router.post('/register-employee', async (req, res) => {
       const newUser = {
         id: Date.now(),
         name,
-        title: pos,
-        position: pos,
         department: dept,
         email: cleanEmail,
         password,
@@ -131,7 +127,7 @@ router.post('/register-employee', async (req, res) => {
         status: 'Working',
         updated_ago: 'Just now',
         role: 'Employee',
-        today_work: 'Newly registered employee'
+        today_work: ''
       };
 
       memoryStore.allEmployees.unshift(newUser);
