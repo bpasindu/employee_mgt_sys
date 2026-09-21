@@ -129,9 +129,6 @@ export default function AdminSidebar({ activeTab, setActiveTab, adminUser, onLog
               <h4 className="text-white text-xs font-semibold truncate leading-tight">
                 {adminUser?.name || 'Nadeesha Silva'}
               </h4>
-              <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                {adminUser?.title || 'System Administrator'}
-              </p>
             </div>
           </div>
           <button 

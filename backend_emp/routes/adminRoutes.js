@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { getIsDbConnected } = require('../initDb');
+const { getIsDbConnected, memoryStore } = require('../initDb');
 
 // Helper to format date strings YYYY-MM-DD
 function getTodayStr() {
@@ -219,6 +219,69 @@ router.get('/work-activity', async (req, res) => {
   } catch (err) {
     console.error('Error fetching work activity:', err);
     res.status(500).json({ error: 'Failed to fetch work activity' });
+  }
+});
+
+// GET /api/admin/leave-calendar?year=2026&month=9
+router.get('/leave-calendar', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
+
+    if (getIsDbConnected()) {
+      const [leaves] = await pool.query(`
+        SELECT lr.id, lr.user_id, u.name AS employee_name, u.department, u.initials,
+               lr.leave_type, lr.start_date, lr.end_date, lr.days_count, lr.status, lr.reason
+        FROM leave_requests lr
+        JOIN users u ON u.id = lr.user_id
+        WHERE lr.status = 'Approved'
+          AND (
+            (YEAR(lr.start_date) = ? AND MONTH(lr.start_date) = ?)
+            OR (YEAR(lr.end_date) = ? AND MONTH(lr.end_date) = ?)
+            OR (lr.start_date <= LAST_DAY(CONCAT(?, '-', LPAD(?, 2, '0'), '-01')) 
+                AND lr.end_date >= CONCAT(?, '-', LPAD(?, 2, '0'), '-01'))
+          )
+        ORDER BY lr.start_date ASC
+      `, [year, month, year, month, year, month, year, month]);
+
+      const formatted = leaves.map(l => ({
+        id: l.id,
+        user_id: l.user_id,
+        employee_name: l.employee_name,
+        department: l.department || 'General',
+        initials: l.initials || l.employee_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
+        leave_type: l.leave_type,
+        start_date: l.start_date ? new Date(l.start_date).toISOString().split('T')[0] : '',
+        end_date: l.end_date ? new Date(l.end_date).toISOString().split('T')[0] : '',
+        days_count: l.days_count,
+        status: l.status,
+        reason: l.reason || ''
+      }));
+
+      return res.json(formatted);
+    } else {
+      const approved = memoryStore.leaveRequests.filter(r => r.status === 'Approved');
+      const formatted = approved.map(l => {
+        const u = memoryStore.user.id === l.user_id ? memoryStore.user : { name: 'Employee', department: 'IT', initials: 'EM' };
+        return {
+          id: l.id,
+          user_id: l.user_id,
+          employee_name: u.name,
+          department: u.department,
+          initials: u.initials,
+          leave_type: l.leave_type,
+          start_date: l.start_date,
+          end_date: l.end_date,
+          days_count: l.days_count,
+          status: l.status,
+          reason: l.reason
+        };
+      });
+      return res.json(formatted);
+    }
+  } catch (err) {
+    console.error('Error fetching leave calendar data:', err);
+    res.status(500).json({ error: 'Failed to fetch leave calendar data' });
   }
 });
 

@@ -453,15 +453,9 @@ export default function LoginPage({ onLoginSuccess }) {
             <p className="text-xs font-bold text-blue-900 uppercase tracking-wider mb-1">
               Email Verification
             </p>
-            <h2 className="text-3xl font-extrabold text-slate-900 leading-tight">
-              Enter OTP Code
-            </h2>
-            {sentOtp && (
-              <div className="mb-5 p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 font-medium flex items-center justify-between">
-                <span>📩 OTP Code (Check Inbox or use below):</span>
-                <span className="font-mono font-bold text-sm tracking-widest text-blue-700 bg-white px-2.5 py-0.5 rounded-lg border border-blue-200">{sentOtp}</span>
-              </div>
-            )}
+            <p className="text-xs text-slate-500 mt-1 mb-6">
+              A 6-digit verification code has been sent to <span className="font-semibold text-slate-800">{email}</span>. Please check your inbox and enter the code below.
+            </p>
 
 
 
@@ -593,15 +587,9 @@ export default function LoginPage({ onLoginSuccess }) {
             <p className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
               Verify Password Change
             </p>
-            <h2 className="text-3xl font-extrabold text-slate-900 leading-tight">
-              Enter Reset OTP Code
-            </h2>
-            {sentOtp && (
-              <div className="mb-5 p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium flex items-center justify-between">
-                <span>📩 OTP Code (Check Inbox or use below):</span>
-                <span className="font-mono font-bold text-sm tracking-widest text-amber-800 bg-white px-2.5 py-0.5 rounded-lg border border-amber-200">{sentOtp}</span>
-              </div>
-            )}
+            <p className="text-xs text-slate-500 mt-1 mb-6">
+              A 6-digit password reset code has been sent to <span className="font-semibold text-slate-800">{email}</span>. Please check your inbox and enter the code below.
+            </p>
 
 
 

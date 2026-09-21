@@ -25,6 +25,7 @@ import HalfDayAndStudyLeave from './components/admin/HalfDayAndStudyLeave';
 import PendingLeaveRequestsTable from './components/admin/PendingLeaveRequestsTable';
 import AdminAllEmployeesView from './components/admin/AdminAllEmployeesView';
 import AdminWorkActivityView from './components/admin/AdminWorkActivityView';
+import LeaveCalendarView from './components/admin/LeaveCalendarView';
 
 export default function App() {
   // Navigation View: 'login' | 'admin' | 'employee'
@@ -295,7 +296,9 @@ export default function App() {
 
             {activeTab === 'work-activity' && <AdminWorkActivityView />}
 
-            {(activeTab === 'leave-calendar' || activeTab === 'settings') && (
+            {activeTab === 'leave-calendar' && <LeaveCalendarView />}
+
+            {activeTab === 'settings' && (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-xs max-w-4xl mx-auto">
                 <h3 className="text-lg font-bold text-slate-800 capitalize">{adminTitles[activeTab]}</h3>
                 <p className="text-xs text-slate-500 mt-1">This section is active and configured for system administration.</p>

@@ -92,9 +92,6 @@ export default function Sidebar({ activeTab, setActiveTab, onOpenApplyLeave, use
               <h4 className="text-white text-xs font-semibold truncate leading-tight">
                 {user?.name || 'Kasun Perera'}
               </h4>
-              <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                {user?.title || 'Software Engineer'}
-              </p>
             </div>
           </div>
           <button 
