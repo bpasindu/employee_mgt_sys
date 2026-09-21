@@ -204,13 +204,13 @@ async function sendLeaveNotificationEmail(userObj, leaveDetails) {
 
     await transporter.sendMail({
       from: `"PeopleOps Leave System" <${process.env.EMAIL_USER}>`,
-      to: 'passbudd@gmail.com',
-      cc: 'pasindu.buddhima@pwholdings.lk',
+      to: 'hashan@pwholdings.lk',
+      cc: ['nishani@pwholdings.lk', 'channa@pwholdings.lk'],
       subject: `Leave Request: ${userObj.name || 'Employee'} - ${leaveDetails.leave_type} (${leaveDetails.start_date})`,
       html: htmlContent
     });
 
-    console.log(`Leave notification email sent to passbudd@gmail.com with CC to pasindu.buddhima@pwholdings.lk`);
+    console.log(`Leave notification email sent to hashan@pwholdings.lk with CC to nishani@pwholdings.lk, channa@pwholdings.lk`);
   } catch (err) {
     console.error('Error sending leave notification email:', err);
   }

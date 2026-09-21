@@ -98,7 +98,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
       // Construct WhatsApp message with Employee Name and open primary WhatsApp app/web
       const empName = user?.name || 'Employee';
       const empDept = user?.department ? ` (${user.department})` : '';
-      const waNumber = '94741016595';
+      const waNumber = '94775227748';
       const waMessage = 
 `*New Leave Request Submission*
 ----------------------------------
