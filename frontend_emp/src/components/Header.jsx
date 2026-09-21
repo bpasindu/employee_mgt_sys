@@ -42,11 +42,7 @@ export default function Header({ title, user, onToggleViewMode }) {
           />
         </div>
 
-        {/* Notification Bell */}
-        <button className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors">
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-        </button>
+
 
         {/* Profile Initials Dropdown */}
         <div className="flex items-center gap-1.5 cursor-pointer pl-2 hover:opacity-85 transition-opacity">

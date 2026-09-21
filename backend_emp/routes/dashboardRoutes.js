@@ -35,7 +35,11 @@ router.get('/dashboard/summary', async (req, res) => {
       const available_days = balance.total_days - balance.used_days;
 
       const [leaves] = await pool.query(
-        'SELECT * FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
+        `SELECT id, leave_type, 
+                DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date, 
+                DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date, 
+                days_count, status, reason 
+         FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 5`,
         [userId]
       );
 
@@ -43,15 +47,7 @@ router.get('/dashboard/summary', async (req, res) => {
         user: { id: user.id, name: user.name, title: user.title, email: user.email, initials: user.initials, status: user.status },
         todayWork: todayEntry,
         leaveBalance: { total_days: balance.total_days, used_days: balance.used_days, available_days },
-        recentLeaveRequests: leaves.map(l => ({
-          id: l.id,
-          leave_type: l.leave_type,
-          start_date: l.start_date ? new Date(l.start_date).toISOString().split('T')[0] : '',
-          end_date: l.end_date ? new Date(l.end_date).toISOString().split('T')[0] : '',
-          days_count: l.days_count,
-          status: l.status,
-          reason: l.reason
-        }))
+        recentLeaveRequests: leaves
       });
     } else {
       const todayEntryObj = memoryStore.workEntries.find(e => e.entry_date === todayStr);
@@ -205,7 +201,11 @@ router.get('/leave/history', async (req, res) => {
   try {
     if (getIsDbConnected()) {
       const [leaves] = await pool.query(
-        'SELECT * FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC',
+        `SELECT id, user_id, leave_type, 
+                DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date, 
+                DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date, 
+                days_count, status, reason, created_at 
+         FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC`,
         [userId]
       );
       res.json(leaves);

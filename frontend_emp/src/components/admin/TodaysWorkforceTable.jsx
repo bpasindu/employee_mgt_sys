@@ -63,13 +63,12 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
               <th className="px-6 py-3.5">Status</th>
               <th className="px-6 py-3.5">Updated</th>
               <th className="px-6 py-3.5">Today's Work</th>
-              <th className="px-4 py-3.5 w-10"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-medium">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-slate-400 font-medium">
+                <td colSpan={5} className="px-6 py-8 text-center text-slate-400 font-medium">
                   No matching employees working today.
                 </td>
               </tr>
@@ -103,11 +102,6 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
                     ) : (
                       <span className="text-slate-400 italic text-xs">No description yet</span>
                     )}
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <button className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors">
-                      <ArrowUpRight className="w-4 h-4" />
-                    </button>
                   </td>
                 </tr>
               ))

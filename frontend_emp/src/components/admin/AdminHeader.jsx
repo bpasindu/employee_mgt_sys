@@ -52,11 +52,7 @@ export default function AdminHeader({ title, adminUser, currentViewMode, onToggl
           />
         </div>
 
-        {/* Notification Bell */}
-        <button className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors">
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-        </button>
+
 
         {/* Profile Avatar & Dropdown */}
         <div className="relative">
@@ -74,7 +70,6 @@ export default function AdminHeader({ title, adminUser, currentViewMode, onToggl
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-20 text-xs font-medium text-slate-700">
               <div className="px-3 py-2 border-b border-slate-100">
                 <p className="font-bold text-slate-900">{adminUser?.name || 'Nadeesha Silva'}</p>
-                <p className="text-[11px] text-slate-400">{adminUser?.title || 'System Administrator'}</p>
               </div>
               <button
                 onClick={() => {

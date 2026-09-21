@@ -62,7 +62,9 @@ router.get('/summary', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT u.id, u.name, u.initials, u.department, u.status,
              COALESCE(dw.work_description, '') AS today_work,
-             lr.leave_type, lr.days_count, lr.reason, lr.start_date, lr.end_date
+             lr.leave_type, lr.days_count, lr.reason, 
+             DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date, 
+             DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date
       FROM users u
       LEFT JOIN daily_work_entries dw
         ON dw.user_id = u.id AND dw.entry_date = ?
@@ -74,9 +76,10 @@ router.get('/summary', async (req, res) => {
     // Fetch pending leave requests with employee names
     const [pending] = await pool.query(`
       SELECT lr.id, u.name AS employee_name, lr.leave_type,
-             lr.start_date AS from_date, lr.end_date AS to_date,
+             DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS from_date, 
+             DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS to_date,
              lr.days_count, lr.reason, lr.status,
-             DATE(lr.created_at) AS applied_date
+             DATE_FORMAT(lr.created_at, '%Y-%m-%d') AS applied_date
       FROM leave_requests lr
       JOIN users u ON u.id = lr.user_id
       WHERE lr.status = 'Pending'
@@ -85,9 +88,9 @@ router.get('/summary', async (req, res) => {
 
     const pendingReqs = pending.map(r => ({
       ...r,
-      from_date: r.from_date ? new Date(r.from_date).toISOString().split('T')[0] : '',
-      to_date: r.to_date ? new Date(r.to_date).toISOString().split('T')[0] : '',
-      applied_date: r.applied_date ? new Date(r.applied_date).toISOString().split('T')[0] : '',
+      from_date: r.from_date || '',
+      to_date: r.to_date || '',
+      applied_date: r.applied_date || '',
       duration: `${r.days_count} ${r.days_count === 1 ? 'Day' : 'Days'}`
     }));
 
@@ -102,8 +105,8 @@ router.get('/summary', async (req, res) => {
         leave_type: e.leave_type || 'Leave',
         half_day_type: timeSlot,
         time_slot: timeSlot,
-        from_date: e.start_date ? new Date(e.start_date).toISOString().split('T')[0] : '',
-        to_date: e.end_date ? new Date(e.end_date).toISOString().split('T')[0] : '',
+        from_date: e.start_date || '',
+        to_date: e.end_date || '',
         duration: e.days_count ? `${e.days_count} ${e.days_count === 1 ? 'Day' : 'Days'}` : 'Full Day',
         reason: e.reason || 'Personal'
       };
@@ -231,7 +234,10 @@ router.get('/leave-calendar', async (req, res) => {
     if (getIsDbConnected()) {
       const [leaves] = await pool.query(`
         SELECT lr.id, lr.user_id, u.name AS employee_name, u.department, u.initials,
-               lr.leave_type, lr.start_date, lr.end_date, lr.days_count, lr.status, lr.reason
+               lr.leave_type, 
+               DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date, 
+               DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date, 
+               lr.days_count, lr.status, lr.reason
         FROM leave_requests lr
         JOIN users u ON u.id = lr.user_id
         WHERE lr.status = 'Approved'
@@ -251,8 +257,8 @@ router.get('/leave-calendar', async (req, res) => {
         department: l.department || 'General',
         initials: l.initials || l.employee_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
         leave_type: l.leave_type,
-        start_date: l.start_date ? new Date(l.start_date).toISOString().split('T')[0] : '',
-        end_date: l.end_date ? new Date(l.end_date).toISOString().split('T')[0] : '',
+        start_date: l.start_date || '',
+        end_date: l.end_date || '',
         days_count: l.days_count,
         status: l.status,
         reason: l.reason || ''
