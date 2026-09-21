@@ -144,12 +144,46 @@ router.post('/leave/apply', async (req, res) => {
 
   try {
     if (getIsDbConnected()) {
+      // Check if employee already has an approved Study Leave during requested duration
+      const [overlappingStudyLeave] = await pool.query(
+        `SELECT * FROM leave_requests 
+         WHERE user_id = ? 
+           AND status = 'Approved' 
+           AND leave_type = 'Study Leave'
+           AND start_date <= ? 
+           AND end_date >= ?`,
+        [user_id, end_date, start_date]
+      );
+
+      if (overlappingStudyLeave.length > 0) {
+        const approved = overlappingStudyLeave[0];
+        const sDate = new Date(approved.start_date).toISOString().split('T')[0];
+        const eDate = new Date(approved.end_date).toISOString().split('T')[0];
+        return res.status(400).json({ 
+          error: `You already have an approved Study Leave from ${sDate} to ${eDate}. Additional leave requests cannot be submitted for this duration.` 
+        });
+      }
+
       await pool.query(
         `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, days_count, status, reason)
          VALUES (?, ?, ?, ?, ?, 'Pending', ?)`,
         [user_id, leave_type, start_date, end_date, days, reason || '']
       );
     } else {
+      const overlapping = memoryStore.leaveRequests.find(r => 
+        r.user_id === Number(user_id) &&
+        r.status === 'Approved' &&
+        r.leave_type === 'Study Leave' &&
+        r.start_date <= end_date &&
+        r.end_date >= start_date
+      );
+
+      if (overlapping) {
+        return res.status(400).json({ 
+          error: `You already have an approved Study Leave from ${overlapping.start_date} to ${overlapping.end_date}. Additional leave requests cannot be submitted for this duration.` 
+        });
+      }
+
       memoryStore.leaveRequests.unshift({
         id: Date.now(), user_id, leave_type, start_date, end_date,
         days_count: days, status: 'Pending', reason: reason || '',

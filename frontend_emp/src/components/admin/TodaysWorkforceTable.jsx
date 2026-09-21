@@ -5,7 +5,7 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All departments');
 
-  const departments = ['All departments', 'IT', 'Finance', 'Operations', 'HR', 'Marketing'];
+  const departments = ['All departments', 'IT', 'Finance'];
 
   const filtered = workforce.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -60,16 +60,16 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
             <tr>
               <th className="px-6 py-3.5">Employee</th>
               <th className="px-6 py-3.5">Department</th>
-              <th className="px-6 py-3.5">Today's Work</th>
               <th className="px-6 py-3.5">Status</th>
               <th className="px-6 py-3.5">Updated</th>
+              <th className="px-6 py-3.5">Today's Work</th>
               <th className="px-4 py-3.5 w-10"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-medium">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-slate-400 font-medium">
+                <td colSpan={6} className="px-6 py-8 text-center text-slate-400 font-medium">
                   No matching employees working today.
                 </td>
               </tr>
@@ -85,17 +85,25 @@ export default function TodaysWorkforceTable({ workforce = [] }) {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600 font-medium">{emp.department}</td>
-                  <td className="px-6 py-4 text-slate-800 font-normal max-w-xs truncate">
-                    {emp.today_work
-                      ? emp.today_work
-                      : <span className="text-slate-400 italic">No description yet</span>}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-emerald-50 text-emerald-600 border border-emerald-200/80 text-[11px] font-bold px-2.5 py-0.5 rounded-md">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-block whitespace-nowrap border text-[11px] font-bold px-2.5 py-0.5 rounded-md ${
+                      emp.status && emp.status.includes('Study Leave')
+                        ? 'bg-sky-50 text-sky-700 border-sky-200'
+                        : 'bg-emerald-50 text-emerald-600 border-emerald-200/80'
+                    }`}>
                       {emp.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-400 text-[11px] font-medium whitespace-nowrap">{emp.updated_ago}</td>
+                  <td className="px-6 py-4 text-slate-800 font-normal min-w-[240px] max-w-md">
+                    {emp.today_work ? (
+                      <div className="max-h-[250px] overflow-y-auto pr-1.5 whitespace-pre-wrap leading-relaxed text-xs text-slate-700 bg-slate-50/60 p-2.5 rounded-xl border border-slate-100">
+                        {emp.today_work}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 italic text-xs">No description yet</span>
+                    )}
+                  </td>
                   <td className="px-4 py-4 text-right">
                     <button className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors">
                       <ArrowUpRight className="w-4 h-4" />

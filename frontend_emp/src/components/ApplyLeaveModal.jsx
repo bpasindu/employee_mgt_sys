@@ -3,69 +3,106 @@ import { X, CalendarPlus } from 'lucide-react';
 
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
   const [leaveType, setLeaveType] = useState('Casual Leave');
-  const [durationOption, setDurationOption] = useState('Full Day'); // 'Full Day' | 'Half Day'
+  const [halfDaySession, setHalfDaySession] = useState('Morning'); // 'Morning' | 'Evening'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [daysCount, setDaysCount] = useState(1);
   const [reason, setReason] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
   const resetForm = () => {
     setLeaveType('Casual Leave');
-    setDurationOption('Full Day');
+    setHalfDaySession('Morning');
     setStartDate('');
     setEndDate('');
     setDaysCount(1);
     setReason('');
+    setErrorMsg('');
+  };
+
+  const isHalfDay = leaveType === 'Half Day';
+
+  const calculateDays = (sDate, eDate) => {
+    if (!sDate || !eDate) return 1;
+    const s = new Date(sDate);
+    const e = new Date(eDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+    const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return diff > 0 ? diff : 1;
+  };
+
+  const handleStartDateChange = (val) => {
+    setStartDate(val);
+    setErrorMsg('');
+    if (isHalfDay) {
+      setEndDate(val);
+      setDaysCount(0.5);
+    } else {
+      const targetEnd = endDate && endDate >= val ? endDate : val;
+      if (!endDate || endDate < val) setEndDate(val);
+      setDaysCount(calculateDays(val, targetEnd));
+    }
+  };
+
+  const handleEndDateChange = (val) => {
+    setEndDate(val);
+    setErrorMsg('');
+    if (startDate) {
+      setDaysCount(calculateDays(startDate, val));
+    }
   };
 
   const handleLeaveTypeChange = (newType) => {
     setLeaveType(newType);
+    setErrorMsg('');
     if (newType === 'Half Day') {
-      setDurationOption('Half Day');
       setDaysCount(0.5);
-    } else if (durationOption === 'Half Day' && newType !== 'Casual Leave' && newType !== 'Medical Leave') {
-      setDurationOption('Full Day');
-      setDaysCount(1);
-    }
-  };
-
-  const handleDurationChange = (option) => {
-    setDurationOption(option);
-    if (option === 'Half Day') {
-      setDaysCount(0.5);
+      if (startDate) setEndDate(startDate);
     } else {
-      setDaysCount(1);
+      if (startDate && endDate) {
+        setDaysCount(calculateDays(startDate, endDate));
+      } else {
+        setDaysCount(1);
+      }
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!startDate || !endDate) return;
+    if (!startDate) return;
+
+    const finalEndDate = isHalfDay ? startDate : endDate;
+    if (!finalEndDate) return;
 
     setIsSubmitting(true);
+    setErrorMsg('');
     try {
-      const finalLeaveType = (leaveType === 'Casual Leave' || leaveType === 'Medical Leave') && durationOption === 'Half Day' 
-        ? 'Half Day' 
-        : leaveType;
+      const finalDaysCount = isHalfDay ? 0.5 : (Number(daysCount) || 1);
+
+      let finalReason = reason;
+      if (isHalfDay) {
+        finalReason = `[${halfDaySession} Half Day] ${reason}`.trim();
+      }
 
       await onSubmitLeave({
-        leave_type: finalLeaveType,
+        leave_type: leaveType,
         start_date: startDate,
-        end_date: endDate,
-        days_count: Number(daysCount) || 1,
-        reason: durationOption === 'Half Day' ? `[Half Day ${leaveType}] ${reason}`.trim() : reason
+        end_date: finalEndDate,
+        days_count: finalDaysCount,
+        reason: finalReason
       });
       resetForm();
       onClose();
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Failed to submit leave request';
+      setErrorMsg(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const showDurationToggle = leaveType === 'Casual Leave' || leaveType === 'Medical Leave' || leaveType === 'Half Day';
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 select-none">
@@ -88,6 +125,11 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {errorMsg && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl font-semibold leading-relaxed">
+              ⚠️ {errorMsg}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Leave Type</label>
             <select
@@ -102,72 +144,89 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
             </select>
           </div>
 
-          {/* Duration Toggle (Full Day / Half Day) */}
-          {showDurationToggle && (
+          {/* Half Day Session Options (Morning / Evening) */}
+          {isHalfDay && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Leave Duration</label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-100/80 p-1 rounded-xl">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Half Day Session</label>
+              <div className="grid grid-cols-2 gap-2 bg-amber-50/60 p-1 rounded-xl border border-amber-200/50">
                 <button
                   type="button"
-                  onClick={() => handleDurationChange('Full Day')}
-                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    durationOption === 'Full Day'
-                      ? 'bg-white text-blue-600 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-800'
+                  onClick={() => setHalfDaySession('Morning')}
+                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    halfDaySession === 'Morning'
+                      ? 'bg-white text-amber-700 shadow-2xs border border-amber-200'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  ☀️ Full Day (1.0)
+                  🌅 Morning Session
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDurationChange('Half Day')}
-                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    durationOption === 'Half Day'
-                      ? 'bg-white text-amber-600 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-800'
+                  onClick={() => setHalfDaySession('Evening')}
+                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    halfDaySession === 'Evening'
+                      ? 'bg-white text-indigo-700 shadow-2xs border border-indigo-200'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  🌓 Half Day (0.5)
+                  🌆 Evening Session
                 </button>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Date Fields */}
+          {isHalfDay ? (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Start Date</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Date</label>
               <input
                 type="date"
                 required
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => handleStartDateChange(e.target.value)}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">End Date</label>
-              <input
-                type="date"
-                required
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
-              />
-            </div>
-          </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={startDate}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    required
+                    min={startDate}
+                    value={endDate}
+                    onChange={(e) => handleEndDateChange(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                  />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Total Days</label>
-            <input
-              type="number"
-              step="0.5"
-              min="0.5"
-              max="30"
-              value={daysCount}
-              onChange={(e) => setDaysCount(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Days (Auto-calculated)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  max="30"
+                  value={daysCount}
+                  onChange={(e) => setDaysCount(e.target.value)}
+                  className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold"
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Reason (Optional)</label>

@@ -51,7 +51,7 @@ export default function WorkHistoryView({ userId }) {
                     {entry.entry_date ? entry.entry_date.split('T')[0] : 'Today'}
                   </span>
                 </div>
-                <p className="text-sm text-slate-800 leading-relaxed font-normal bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <p className="text-sm text-slate-800 leading-relaxed font-normal bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap">
                   {entry.work_description}
                 </p>
               </div>

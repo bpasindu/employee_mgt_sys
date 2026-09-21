@@ -24,7 +24,7 @@ export default function AdminWorkActivityView() {
     }
   };
 
-  const departments = ['All', 'IT', 'Finance', 'Operations', 'HR', 'Marketing'];
+  const departments = ['All', 'IT', 'Finance'];
 
   const filtered = activities.filter((act) => {
     const matchesSearch =

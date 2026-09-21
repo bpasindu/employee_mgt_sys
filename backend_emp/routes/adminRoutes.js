@@ -10,12 +10,21 @@ function getTodayStr() {
 
 // Helper: format an employee row for admin views (no position field)
 function formatEmp(emp) {
+  let displayStatus = emp.status || 'Working';
+  if (emp.leave_type === 'Study Leave') {
+    if (emp.today_work && emp.today_work.trim() !== '') {
+      displayStatus = 'Study Leave / Work Today';
+    } else {
+      displayStatus = 'Study Leave';
+    }
+  }
+
   return {
     id: emp.id,
     name: emp.name,
     initials: emp.initials || emp.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
     department: emp.department || 'General',
-    status: emp.status || 'Working',
+    status: displayStatus,
     today_work: emp.today_work || '',
     updated_ago: 'Today'
   };
@@ -82,27 +91,35 @@ router.get('/summary', async (req, res) => {
       duration: `${r.days_count} ${r.days_count === 1 ? 'Day' : 'Days'}`
     }));
 
-    // Format employee with leave info
-    const formatEmpWithLeave = (e) => ({
-      ...formatEmp(e),
-      leave_type: e.leave_type || 'Leave',
-      from_date: e.start_date ? new Date(e.start_date).toISOString().split('T')[0] : '',
-      to_date: e.end_date ? new Date(e.end_date).toISOString().split('T')[0] : '',
-      duration: e.days_count ? `${e.days_count} ${e.days_count === 1 ? 'Day' : 'Days'}` : 'Full Day',
-      reason: e.reason || 'Personal'
-    });
+    // Helper to format employee with leave info
+    const formatEmpWithLeave = (e) => {
+      let timeSlot = 'Half Day';
+      if (e.reason && e.reason.includes('Morning')) timeSlot = 'Morning Session';
+      else if (e.reason && e.reason.includes('Evening')) timeSlot = 'Evening Session';
+
+      return {
+        ...formatEmp(e),
+        leave_type: e.leave_type || 'Leave',
+        half_day_type: timeSlot,
+        time_slot: timeSlot,
+        from_date: e.start_date ? new Date(e.start_date).toISOString().split('T')[0] : '',
+        to_date: e.end_date ? new Date(e.end_date).toISOString().split('T')[0] : '',
+        duration: e.days_count ? `${e.days_count} ${e.days_count === 1 ? 'Day' : 'Days'}` : 'Full Day',
+        reason: e.reason || 'Personal'
+      };
+    };
 
     // Stats
     const total_employees  = rows.length;
-    const working_today    = rows.filter(e => e.status === 'Working').length;
-    const on_leave_today   = rows.filter(e => e.status === 'On Leave').length;
+    const working_today    = rows.filter(e => e.status === 'Working' || (e.today_work && e.today_work.trim() !== '')).length;
+    const on_leave_today   = rows.filter(e => e.status === 'On Leave' && (!e.leave_type || e.leave_type !== 'Study Leave')).length;
     const half_day         = rows.filter(e => e.leave_type === 'Half Day' || e.status === 'Half Day').length;
     const study_leave      = rows.filter(e => e.leave_type === 'Study Leave' || e.status === 'Study Leave').length;
     const pending_requests = pendingReqs.length;
 
     // Partition into status groups
-    const workingWorkforce    = rows.filter(e => e.status === 'Working').map(formatEmp);
-    const todaysLeave         = rows.filter(e => e.status === 'On Leave').map(formatEmpWithLeave);
+    const workingWorkforce    = rows.filter(e => e.status === 'Working' || (e.today_work && e.today_work.trim() !== '')).map(formatEmp);
+    const todaysLeave         = rows.filter(e => e.status === 'On Leave' && (!e.leave_type || e.leave_type !== 'Study Leave')).map(formatEmpWithLeave);
     const halfDayEmployees    = rows.filter(e => e.leave_type === 'Half Day' || e.status === 'Half Day').map(formatEmpWithLeave);
     const studyLeaveEmployees = rows.filter(e => e.leave_type === 'Study Leave' || e.status === 'Study Leave').map(formatEmpWithLeave);
 
@@ -123,6 +140,7 @@ router.get('/summary', async (req, res) => {
 // GET /api/admin/employees?department=All
 router.get('/employees', async (req, res) => {
   try {
+    const todayStr = getTodayStr();
     if (!getIsDbConnected()) {
       return res.status(503).json({ error: 'Database not connected' });
     }
@@ -130,13 +148,16 @@ router.get('/employees', async (req, res) => {
     const { department } = req.query;
     let query = `
       SELECT u.id, u.name, u.department, u.email, u.initials, u.status, u.role,
-             COALESCE(dw.work_description, '') AS today_work
+             COALESCE(dw.work_description, '') AS today_work,
+             lr.leave_type
       FROM users u
       LEFT JOIN daily_work_entries dw
         ON dw.user_id = u.id AND dw.entry_date = ?
+      LEFT JOIN leave_requests lr
+        ON lr.user_id = u.id AND lr.status = 'Approved' AND ? BETWEEN lr.start_date AND lr.end_date
       WHERE 1=1
     `;
-    const params = [getTodayStr()];
+    const params = [todayStr, todayStr];
 
     if (department && department !== 'All departments') {
       query += ' AND LOWER(u.department) = ?';
@@ -146,7 +167,28 @@ router.get('/employees', async (req, res) => {
     query += ' ORDER BY u.name ASC';
 
     const [rows] = await pool.query(query, params);
-    res.json(rows);
+
+    const formatted = rows.map(e => {
+      let displayStatus = e.status || 'Working';
+      if (e.leave_type === 'Study Leave') {
+        if (e.today_work && e.today_work.trim() !== '') {
+          displayStatus = 'Study Leave / Work Today';
+        } else {
+          displayStatus = 'Study Leave';
+        }
+      } else if (e.leave_type === 'Half Day') {
+        displayStatus = 'Half Day';
+      } else if (e.leave_type) {
+        displayStatus = 'On Leave';
+      }
+
+      return {
+        ...e,
+        status: displayStatus
+      };
+    });
+
+    res.json(formatted);
   } catch (err) {
     console.error('Error fetching employees list:', err);
     res.status(500).json({ error: 'Failed to fetch employees' });

@@ -18,34 +18,46 @@ export default function HalfDayAndStudyLeave({ halfDayList = [], studyLeaveList 
             </div>
           ) : (
             <div className="space-y-4">
-              {halfDayList.map((emp) => (
-                <div key={emp.id || Math.random()} className="border border-slate-100 bg-slate-50/50 rounded-2xl p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
-                        {emp.initials}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">{emp.name}</h4>
-                        <p className="text-[11px] text-slate-500">
-                          {emp.department} · {emp.half_day_type || 'Half Day'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="bg-amber-50 text-amber-600 border border-amber-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                      Half Day
-                    </span>
-                  </div>
+              {halfDayList.map((emp) => {
+                const session = emp.time_slot || emp.half_day_type || (emp.reason && emp.reason.includes('Morning') ? 'Morning Session' : emp.reason && emp.reason.includes('Evening') ? 'Evening Session' : 'Half Day');
+                const isMorning = session.includes('Morning');
+                const isEvening = session.includes('Evening');
 
-                  {emp.time_slot && (
-                    <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5 mt-2">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>{emp.time_slot}</span>
+                return (
+                  <div key={emp.id || Math.random()} className="border border-slate-100 bg-slate-50/50 rounded-2xl p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 font-bold text-xs flex items-center justify-center shrink-0 border border-amber-200/60">
+                          {emp.initials}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">{emp.name}</h4>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {emp.department} · <span className={isMorning ? "text-amber-700 font-semibold" : isEvening ? "text-indigo-700 font-semibold" : ""}>{session}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                        isMorning
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : isEvening
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          : 'bg-amber-50 text-amber-600 border-amber-200'
+                      }`}>
+                        {isMorning ? '🌅 Morning' : isEvening ? '🌆 Evening' : 'Half Day'}
+                      </span>
                     </div>
-                  )}
-                  <p className="text-xs text-slate-500 mt-1 font-medium">{emp.reason || 'Personal'}</p>
-                </div>
-              ))}
+
+                    <div className={`text-xs font-bold flex items-center gap-1.5 mt-2 ${
+                      isMorning ? 'text-amber-800' : isEvening ? 'text-indigo-800' : 'text-slate-700'
+                    }`}>
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{session}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 font-medium">{emp.reason || 'Personal'}</p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -23,7 +23,7 @@ export default function AdminAllEmployeesView() {
     }
   };
 
-  const departments = ['All departments', 'IT', 'Finance', 'Operations', 'HR', 'Marketing'];
+  const departments = ['All departments', 'IT', 'Finance'];
 
   const filtered = employees.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -93,8 +93,8 @@ export default function AdminAllEmployeesView() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600 font-semibold">{emp.department}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-block whitespace-nowrap px-2.5 py-1 rounded-md text-[11px] font-bold border ${
                       emp.status === 'Working'
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                         : emp.status === 'On Leave'
@@ -106,8 +106,14 @@ export default function AdminAllEmployeesView() {
                       {emp.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-600 max-w-sm truncate">
-                    {emp.today_work || 'N/A'}
+                  <td className="px-6 py-4 text-slate-600 font-normal min-w-[200px] max-w-md">
+                    {emp.today_work ? (
+                      <div className="max-h-[250px] overflow-y-auto pr-1.5 whitespace-pre-wrap leading-relaxed text-xs text-slate-700 bg-slate-50/60 p-2.5 rounded-xl border border-slate-100">
+                        {emp.today_work}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 italic text-xs">N/A</span>
+                    )}
                   </td>
                 </tr>
               ))}
