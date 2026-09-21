@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Calendar } from 'lucide-react';
 
 export default function HalfDayAndStudyLeave({ halfDayList = [], studyLeaveList = [] }) {
   const studyLeave = studyLeaveList.length > 0 ? studyLeaveList[0] : null;
@@ -82,11 +82,20 @@ export default function HalfDayAndStudyLeave({ halfDayList = [], studyLeaveList 
                     </span>
                   </div>
 
-                  {studyLeave.duration && (
-                    <div className="text-xs font-bold text-blue-900 flex items-center gap-2 my-2">
+                  {studyLeave.from_date && studyLeave.to_date ? (
+                    <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5 my-2">
+                      <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>
+                        Time Period: {studyLeave.from_date} to {studyLeave.to_date}
+                        {studyLeave.duration && ` (${studyLeave.duration})`}
+                      </span>
+                    </div>
+                  ) : studyLeave.duration ? (
+                    <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5 my-2">
+                      <Clock className="w-4 h-4 text-blue-600 shrink-0" />
                       <span>Duration: {studyLeave.duration}</span>
                     </div>
-                  )}
+                  ) : null}
                   <p className="text-xs text-slate-600 font-medium">Reason: {studyLeave.reason || 'Examination'}</p>
                 </div>
               ))}

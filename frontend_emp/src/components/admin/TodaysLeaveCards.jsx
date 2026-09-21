@@ -44,6 +44,13 @@ export default function TodaysLeaveCards({ leaves = [] }) {
                 </div>
               </div>
 
+              {item.from_date && item.to_date && (
+                <div className="text-xs mb-3">
+                  <span className="text-[11px] text-slate-400 font-medium block">Time Period</span>
+                  <span className="font-semibold text-blue-700 text-xs mt-0.5 block">{item.from_date} to {item.to_date}</span>
+                </div>
+              )}
+
               <div className="text-xs">
                 <span className="text-[11px] text-slate-400 font-medium block">Reason</span>
                 <span className="font-medium text-slate-700 text-xs mt-0.5 block">{item.reason || 'Personal'}</span>

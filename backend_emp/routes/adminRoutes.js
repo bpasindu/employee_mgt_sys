@@ -53,7 +53,7 @@ router.get('/summary', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT u.id, u.name, u.initials, u.department, u.status,
              COALESCE(dw.work_description, '') AS today_work,
-             lr.leave_type, lr.days_count, lr.reason
+             lr.leave_type, lr.days_count, lr.reason, lr.start_date, lr.end_date
       FROM users u
       LEFT JOIN daily_work_entries dw
         ON dw.user_id = u.id AND dw.entry_date = ?
@@ -86,6 +86,8 @@ router.get('/summary', async (req, res) => {
     const formatEmpWithLeave = (e) => ({
       ...formatEmp(e),
       leave_type: e.leave_type || 'Leave',
+      from_date: e.start_date ? new Date(e.start_date).toISOString().split('T')[0] : '',
+      to_date: e.end_date ? new Date(e.end_date).toISOString().split('T')[0] : '',
       duration: e.days_count ? `${e.days_count} ${e.days_count === 1 ? 'Day' : 'Days'}` : 'Full Day',
       reason: e.reason || 'Personal'
     });
