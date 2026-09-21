@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CalendarPlus } from 'lucide-react';
 
-export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
+export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }) {
   const [leaveType, setLeaveType] = useState('Casual Leave');
   const [halfDaySession, setHalfDaySession] = useState('Morning'); // 'Morning' | 'Evening'
   const [startDate, setStartDate] = useState('');
@@ -94,6 +94,27 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave }) {
         days_count: finalDaysCount,
         reason: finalReason
       });
+
+      // Construct WhatsApp message with Employee Name and open primary WhatsApp app/web
+      const empName = user?.name || 'Employee';
+      const empDept = user?.department ? ` (${user.department})` : '';
+      const waNumber = '94741016595';
+      const waMessage = 
+`*New Leave Request Submission*
+----------------------------------
+*Employee Name:* ${empName}${empDept}
+*Leave Type:* ${leaveType}
+*Duration:* ${startDate} to ${finalEndDate} (${finalDaysCount} ${finalDaysCount === 1 ? 'day' : 'days'})
+*Reason / Details:* ${finalReason || 'None'}
+----------------------------------
+Submitted via P W Holdings Employee Management System`;
+
+      const encodedMsg = encodeURIComponent(waMessage);
+      const waUrl = `https://wa.me/${waNumber}?text=${encodedMsg}`;
+      
+      // Open in primary WhatsApp Web or Desktop application
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+
       resetForm();
       onClose();
     } catch (err) {

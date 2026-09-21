@@ -354,6 +354,7 @@ export default function App() {
         isOpen={isApplyLeaveOpen}
         onClose={() => setIsApplyLeaveOpen(false)}
         onSubmitLeave={handleSubmitLeave}
+        user={user}
       />
     </div>
   );
