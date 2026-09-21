@@ -128,6 +128,94 @@ router.get('/work-entry/history', async (req, res) => {
   }
 });
 
+const nodemailer = require('nodemailer');
+
+// Send Leave Request Email Notification
+async function sendLeaveNotificationEmail(userObj, leaveDetails) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log('Skipping email notification: EMAIL_USER / EMAIL_PASS not set.');
+    return;
+  }
+
+  try {
+    let transporter;
+    const isGmail = (process.env.EMAIL_USER || '').includes('@gmail.com') || (process.env.EMAIL_HOST || '').includes('gmail');
+    if (isGmail) {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        }
+      });
+    } else {
+      transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+        port: Number(process.env.EMAIL_PORT) || 587,
+        secure: Number(process.env.EMAIL_PORT) === 465,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        }
+      });
+    }
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px; background-color: #ffffff;">
+        <div style="background-color: #022851; padding: 16px 20px; border-radius: 8px; color: #ffffff; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 20px;">New Leave Application Request</h2>
+          <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.85;">P W Holdings - Employee Management System</p>
+        </div>
+
+        <p style="font-size: 14px; color: #334155;">A new leave application has been submitted and is pending review. Below are the details:</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px;">
+          <tr style="background-color: #f8fafc;">
+            <td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0; color: #475569; width: 35%;">Employee Name:</td>
+            <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: bold;">${userObj.name || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0; color: #475569;">Email:</td>
+            <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${userObj.email || 'N/A'}</td>
+          </tr>
+          <tr style="background-color: #f8fafc;">
+            <td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0; color: #475569;">Department:</td>
+            <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${userObj.department || 'IT'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0; color: #475569;">Leave Type:</td>
+            <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #2563eb; font-weight: bold;">${leaveDetails.leave_type}</td>
+          </tr>
+          <tr style="background-color: #f8fafc;">
+            <td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0; color: #475569;">Duration / Dates:</td>
+            <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${leaveDetails.start_date} to ${leaveDetails.end_date} (${leaveDetails.days_count} ${leaveDetails.days_count === 1 ? 'day' : 'days'})</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0; color: #475569;">Reason / Notes:</td>
+            <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${leaveDetails.reason || 'None provided'}</td>
+          </tr>
+        </table>
+
+        <div style="margin-top: 25px; padding: 12px; background-color: #f1f5f9; border-radius: 6px; font-size: 12px; color: #64748b; text-align: center;">
+          Please log into the <strong>Admin Dashboard</strong> to approve or reject this request.
+        </div>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: `"PeopleOps Leave System" <${process.env.EMAIL_USER}>`,
+      to: 'passbudd@gmail.com',
+      cc: 'pasindu.buddhima@pwholdings.lk',
+      subject: `Leave Request: ${userObj.name || 'Employee'} - ${leaveDetails.leave_type} (${leaveDetails.start_date})`,
+      html: htmlContent
+    });
+
+    console.log(`Leave notification email sent to passbudd@gmail.com with CC to pasindu.buddhima@pwholdings.lk`);
+  } catch (err) {
+    console.error('Error sending leave notification email:', err);
+  }
+}
+
 // POST /api/leave/apply
 router.post('/leave/apply', async (req, res) => {
   const { user_id, leave_type, start_date, end_date, days_count, reason } = req.body;
@@ -139,7 +227,14 @@ router.post('/leave/apply', async (req, res) => {
   const days = Number(days_count) || 1;
 
   try {
+    let applicantUser = { id: user_id, name: 'Employee', email: '', department: 'IT' };
+
     if (getIsDbConnected()) {
+      const [uRows] = await pool.query('SELECT name, email, department FROM users WHERE id = ?', [user_id]);
+      if (uRows.length > 0) {
+        applicantUser = uRows[0];
+      }
+
       // Check if employee already has an approved Study Leave during requested duration
       const [overlappingStudyLeave] = await pool.query(
         `SELECT * FROM leave_requests 
@@ -166,6 +261,10 @@ router.post('/leave/apply', async (req, res) => {
         [user_id, leave_type, start_date, end_date, days, reason || '']
       );
     } else {
+      if (memoryStore.user && memoryStore.user.id === Number(user_id)) {
+        applicantUser = memoryStore.user;
+      }
+
       const overlapping = memoryStore.leaveRequests.find(r => 
         r.user_id === Number(user_id) &&
         r.status === 'Approved' &&
@@ -186,6 +285,16 @@ router.post('/leave/apply', async (req, res) => {
         created_at: new Date().toISOString()
       });
     }
+
+    // Trigger async email notification
+    sendLeaveNotificationEmail(applicantUser, {
+      leave_type,
+      start_date,
+      end_date,
+      days_count: days,
+      reason: reason || ''
+    });
+
     res.json({ message: 'Leave request submitted successfully' });
   } catch (err) {
     console.error('Error submitting leave request:', err);
