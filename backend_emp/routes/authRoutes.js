@@ -100,44 +100,44 @@ router.post('/login', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    if (getIsDbConnected()) {
+    // Attempt database lookup first
+    let user = null;
+    try {
       const [rows] = await pool.query(
         'SELECT id, name, department, email, password, initials, status, role FROM users WHERE LOWER(email) = ?',
         [cleanEmail]
       );
-
-      if (rows.length === 0) {
-        return res.status(401).json({ error: 'Invalid email address or password' });
+      if (rows.length > 0) {
+        user = rows[0];
       }
-
-      const user = rows[0];
-      if (user.password !== password) {
-        return res.status(401).json({ error: 'Invalid email address or password' });
-      }
-
-      delete user.password;
-      return res.json({ message: 'Login successful', user });
-    } else {
-      let foundUser = memoryStore.admins.find(a => a.email.toLowerCase() === cleanEmail);
+    } catch (dbErr) {
+      console.error('MySQL query error during login:', dbErr.message);
+      // Fallback check memoryStore if DB query fails
+      let foundUser = (memoryStore.admins || []).find(a => a.email.toLowerCase() === cleanEmail);
       if (!foundUser) {
-        foundUser = memoryStore.allEmployees.find(e => e.email.toLowerCase() === cleanEmail);
+        foundUser = (memoryStore.allEmployees || []).find(e => e.email.toLowerCase() === cleanEmail);
       }
-      if (!foundUser && memoryStore.user.email.toLowerCase() === cleanEmail) {
+      if (!foundUser && memoryStore.user?.email?.toLowerCase() === cleanEmail) {
         foundUser = memoryStore.user;
       }
-
-      if (!foundUser || foundUser.password !== password) {
-        return res.status(401).json({ error: 'Invalid email address or password' });
-      }
-
-      const user = { ...foundUser };
-      delete user.password;
-      return res.json({ message: 'Login successful', user });
+      if (foundUser) user = { ...foundUser };
     }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email address or password' });
+    }
+
+    if (user.password !== password) {
+      return res.status(401).json({ error: 'Invalid email address or password' });
+    }
+
+    delete user.password;
+    return res.json({ message: 'Login successful', user });
   } catch (err) {
     console.error('Error during login:', err);
-    res.status(500).json({ error: 'Authentication failed' });
+    res.status(500).json({ error: 'Authentication failed', message: err.message });
   }
+
 });
 
 // POST /api/auth/send-otp - Generate & send real OTP via email
