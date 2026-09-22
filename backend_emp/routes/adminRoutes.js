@@ -62,7 +62,7 @@ router.get('/summary', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT u.id, u.name, u.initials, u.department, u.status,
              COALESCE(dw.work_description, '') AS today_work,
-             lr.leave_type, lr.days_count, lr.reason, 
+             lr.leave_type, lr.days_count, lr.day_of_week, lr.start_time, lr.end_time, lr.is_recurring, lr.reason, 
              DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date, 
              DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date
       FROM users u
@@ -78,7 +78,7 @@ router.get('/summary', async (req, res) => {
       SELECT lr.id, u.name AS employee_name, lr.leave_type,
              DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS from_date, 
              DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS to_date,
-             lr.days_count, lr.reason, lr.status,
+             lr.days_count, lr.day_of_week, lr.start_time, lr.end_time, lr.is_recurring, lr.reason, lr.status,
              DATE_FORMAT(lr.created_at, '%Y-%m-%d') AS applied_date
       FROM leave_requests lr
       JOIN users u ON u.id = lr.user_id
@@ -91,13 +91,17 @@ router.get('/summary', async (req, res) => {
       from_date: r.from_date || '',
       to_date: r.to_date || '',
       applied_date: r.applied_date || '',
-      duration: `${r.days_count} ${r.days_count === 1 ? 'Day' : 'Days'}`
+      duration: r.leave_type === 'Special Leave' && r.day_of_week
+        ? `Every ${r.day_of_week} (${r.start_time || ''} - ${r.end_time || ''})`
+        : `${r.days_count} ${r.days_count === 1 ? 'Day' : 'Days'}`
     }));
 
     // Helper to format employee with leave info
     const formatEmpWithLeave = (e) => {
       let timeSlot = 'Half Day';
-      if (e.reason && e.reason.includes('Morning')) timeSlot = 'Morning Session';
+      if (e.leave_type === 'Special Leave') {
+        timeSlot = e.day_of_week ? `Every ${e.day_of_week} (${e.start_time || ''} - ${e.end_time || ''})` : 'Special Leave';
+      } else if (e.reason && e.reason.includes('Morning')) timeSlot = 'Morning Session';
       else if (e.reason && e.reason.includes('Evening')) timeSlot = 'Evening Session';
 
       return {
@@ -105,9 +109,14 @@ router.get('/summary', async (req, res) => {
         leave_type: e.leave_type || 'Leave',
         half_day_type: timeSlot,
         time_slot: timeSlot,
+        day_of_week: e.day_of_week || null,
+        start_time: e.start_time || null,
+        end_time: e.end_time || null,
         from_date: e.start_date || '',
         to_date: e.end_date || '',
-        duration: e.days_count ? `${e.days_count} ${e.days_count === 1 ? 'Day' : 'Days'}` : 'Full Day',
+        duration: e.leave_type === 'Special Leave' && e.day_of_week
+          ? `Every ${e.day_of_week}`
+          : (e.days_count ? `${e.days_count} ${e.days_count === 1 ? 'Day' : 'Days'}` : 'Full Day'),
         reason: e.reason || 'Personal'
       };
     };
@@ -118,6 +127,7 @@ router.get('/summary', async (req, res) => {
     const on_leave_today   = rows.filter(e => e.status === 'On Leave' && (!e.leave_type || e.leave_type !== 'Study Leave')).length;
     const half_day         = rows.filter(e => e.leave_type === 'Half Day' || e.status === 'Half Day').length;
     const study_leave      = rows.filter(e => e.leave_type === 'Study Leave' || e.status === 'Study Leave').length;
+    const special_leave    = rows.filter(e => e.leave_type === 'Special Leave').length;
     const pending_requests = pendingReqs.length;
 
     // Partition into status groups
@@ -125,13 +135,15 @@ router.get('/summary', async (req, res) => {
     const todaysLeave         = rows.filter(e => e.status === 'On Leave' && (!e.leave_type || e.leave_type !== 'Study Leave')).map(formatEmpWithLeave);
     const halfDayEmployees    = rows.filter(e => e.leave_type === 'Half Day' || e.status === 'Half Day').map(formatEmpWithLeave);
     const studyLeaveEmployees = rows.filter(e => e.leave_type === 'Study Leave' || e.status === 'Study Leave').map(formatEmpWithLeave);
+    const specialLeaveEmployees = rows.filter(e => e.leave_type === 'Special Leave').map(formatEmpWithLeave);
 
     res.json({
-      stats: { total_employees, working_today, on_leave_today, half_day, study_leave, pending_requests },
+      stats: { total_employees, working_today, on_leave_today, half_day, study_leave, special_leave, pending_requests },
       workingWorkforce,
       todaysLeave,
       halfDayEmployees,
       studyLeaveEmployees,
+      specialLeaveEmployees,
       pendingLeaveRequests: pendingReqs
     });
   } catch (err) {

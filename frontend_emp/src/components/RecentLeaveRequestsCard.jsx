@@ -12,13 +12,22 @@ export default function RecentLeaveRequestsCard({ requests = [] }) {
       ) : (
         <div className="divide-y divide-slate-100">
           {requests.map((req) => {
-            const daysText = `${req.days_count} ${req.days_count === 1 ? 'Day' : 'Days'}`;
+            const isSpecial = req.leave_type === 'Special Leave';
+            const daysText = isSpecial && req.day_of_week 
+              ? `Every ${req.day_of_week} (${req.start_time || ''} - ${req.end_time || ''})`
+              : `${req.days_count} ${req.days_count === 1 ? 'Day' : 'Days'}`;
             const dateFormatted = req.start_date ? req.start_date.split('T')[0] : '';
 
             return (
               <div key={req.id || Math.random()} className="py-3.5 flex items-center justify-between first:pt-2 last:pb-0">
                 <div>
-                  <h4 className="text-sm font-bold text-slate-800 leading-tight">{req.leave_type}</h4>
+                  <h4 className="text-sm font-bold text-slate-800 leading-tight">
+                    {isSpecial ? (
+                      <span className="text-purple-700 font-bold flex items-center gap-1">
+                        🔄 Special Leave
+                      </span>
+                    ) : req.leave_type}
+                  </h4>
                   <p className="text-xs font-medium text-slate-400 mt-0.5">
                     {dateFormatted} · {daysText}
                   </p>

@@ -69,7 +69,13 @@ export default function PendingLeaveRequestsTable({ requests = [], onApprove, on
               requests.map((req) => (
                 <tr key={req.id} className="hover:bg-slate-50/60 transition-colors">
                   <td className="px-6 py-4 font-bold text-slate-900">{req.employee_name}</td>
-                  <td className="px-6 py-4 text-slate-700 font-semibold">{req.leave_type}</td>
+                  <td className="px-6 py-4 text-slate-700 font-semibold">
+                    {req.leave_type === 'Special Leave' ? (
+                      <span className="bg-purple-50 text-purple-700 border border-purple-200/80 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1">
+                        🔄 Special Leave
+                      </span>
+                    ) : req.leave_type}
+                  </td>
                   <td className="px-6 py-4 text-slate-600">{req.from_date}</td>
                   <td className="px-6 py-4 text-slate-600">{req.to_date}</td>
                   <td className="px-6 py-4 font-bold text-slate-800">{req.duration}</td>

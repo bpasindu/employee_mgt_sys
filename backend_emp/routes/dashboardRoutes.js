@@ -219,13 +219,15 @@ async function sendLeaveNotificationEmail(userObj, leaveDetails) {
 
 // POST /api/leave/apply
 router.post('/leave/apply', async (req, res) => {
-  const { user_id, leave_type, start_date, end_date, days_count, reason } = req.body;
+  const { user_id, leave_type, start_date, end_date, days_count, reason, day_of_week, start_time, end_time, is_recurring } = req.body;
 
   if (!user_id || !leave_type || !start_date || !end_date) {
     return res.status(400).json({ error: 'user_id, leave_type, start_date, and end_date are required' });
   }
 
   const days = Number(days_count) || 1;
+  const isSpecial = leave_type === 'Special Leave';
+  const finalRecurring = isSpecial ? 1 : (is_recurring ? 1 : 0);
 
   try {
     let applicantUser = { id: user_id, name: 'Employee', email: '', department: 'IT' };
@@ -257,9 +259,9 @@ router.post('/leave/apply', async (req, res) => {
       }
 
       await pool.query(
-        `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, days_count, status, reason)
-         VALUES (?, ?, ?, ?, ?, 'Pending', ?)`,
-        [user_id, leave_type, start_date, end_date, days, reason || '']
+        `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, days_count, day_of_week, start_time, end_time, is_recurring, status, reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`,
+        [user_id, leave_type, start_date, end_date, days, day_of_week || null, start_time || null, end_time || null, finalRecurring, reason || '']
       );
     } else {
       if (memoryStore.user && memoryStore.user.id === Number(user_id)) {
@@ -282,7 +284,7 @@ router.post('/leave/apply', async (req, res) => {
 
       memoryStore.leaveRequests.unshift({
         id: Date.now(), user_id, leave_type, start_date, end_date,
-        days_count: days, status: 'Pending', reason: reason || '',
+        days_count: days, day_of_week: day_of_week || null, start_time: start_time || null, end_time: end_time || null, is_recurring: finalRecurring, status: 'Pending', reason: reason || '',
         created_at: new Date().toISOString()
       });
     }
@@ -293,6 +295,9 @@ router.post('/leave/apply', async (req, res) => {
       start_date,
       end_date,
       days_count: days,
+      day_of_week,
+      start_time,
+      end_time,
       reason: reason || ''
     });
 
@@ -314,7 +319,7 @@ router.get('/leave/history', async (req, res) => {
         `SELECT id, user_id, leave_type, 
                 DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date, 
                 DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date, 
-                days_count, status, reason, created_at 
+                days_count, day_of_week, start_time, end_time, is_recurring, status, reason, created_at 
          FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC`,
         [userId]
       );

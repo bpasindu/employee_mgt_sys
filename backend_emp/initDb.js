@@ -65,13 +65,28 @@ async function initDatabase() {
         leave_type VARCHAR(50) NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
-        days_count INT NOT NULL,
+        days_count DECIMAL(4,2) NOT NULL DEFAULT 1.0,
+        day_of_week VARCHAR(20) DEFAULT NULL,
+        start_time TIME DEFAULT NULL,
+        end_time TIME DEFAULT NULL,
+        is_recurring TINYINT(1) DEFAULT 0,
         status VARCHAR(50) DEFAULT 'Pending',
         reason TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure columns exist on existing tables
+    const alterQueries = [
+      "ALTER TABLE leave_requests ADD COLUMN day_of_week VARCHAR(20) DEFAULT NULL",
+      "ALTER TABLE leave_requests ADD COLUMN start_time TIME DEFAULT NULL",
+      "ALTER TABLE leave_requests ADD COLUMN end_time TIME DEFAULT NULL",
+      "ALTER TABLE leave_requests ADD COLUMN is_recurring TINYINT(1) DEFAULT 0"
+    ];
+    for (const q of alterQueries) {
+      try { await connection.query(q); } catch (e) { /* Column may already exist */ }
+    }
 
     connection.release();
     console.log('All tables verified/created successfully.');

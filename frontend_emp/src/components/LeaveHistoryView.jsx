@@ -58,14 +58,24 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave }) {
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {leaves.map((leave) => {
+                const isSpecial = leave.leave_type === 'Special Leave';
                 const sDate = leave.start_date ? leave.start_date.split('T')[0] : '';
                 const eDate = leave.end_date ? leave.end_date.split('T')[0] : '';
+                const durationText = isSpecial && leave.day_of_week
+                  ? `Every ${leave.day_of_week} (${leave.start_time || ''} - ${leave.end_time || ''}) starting ${sDate}`
+                  : `${sDate} to ${eDate}`;
 
                 return (
                   <tr key={leave.id || Math.random()} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="px-6 py-4 font-bold text-slate-800">{leave.leave_type}</td>
-                    <td className="px-6 py-4 text-slate-600">{sDate} to {eDate}</td>
-                    <td className="px-6 py-4 text-slate-700 font-semibold">{leave.days_count}</td>
+                    <td className="px-6 py-4 font-bold text-slate-800">
+                      {isSpecial ? (
+                        <span className="bg-purple-50 text-purple-700 border border-purple-200/80 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1">
+                          🔄 Special Leave
+                        </span>
+                      ) : leave.leave_type}
+                    </td>
+                    <td className="px-6 py-4 text-slate-600">{durationText}</td>
+                    <td className="px-6 py-4 text-slate-700 font-semibold">{isSpecial && leave.day_of_week ? `Every ${leave.day_of_week}` : leave.days_count}</td>
                     <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{leave.reason || 'N/A'}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border ${

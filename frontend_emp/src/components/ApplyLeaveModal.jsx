@@ -4,6 +4,9 @@ import { X, CalendarPlus } from 'lucide-react';
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }) {
   const [leaveType, setLeaveType] = useState('Casual Leave');
   const [halfDaySession, setHalfDaySession] = useState('Morning'); // 'Morning' | 'Evening'
+  const [dayOfWeek, setDayOfWeek] = useState('Monday');
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('13:00');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [daysCount, setDaysCount] = useState(1);
@@ -16,6 +19,9 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
   const resetForm = () => {
     setLeaveType('Casual Leave');
     setHalfDaySession('Morning');
+    setDayOfWeek('Monday');
+    setStartTime('09:00');
+    setEndTime('13:00');
     setStartDate('');
     setEndDate('');
     setDaysCount(1);
@@ -24,6 +30,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
   };
 
   const isHalfDay = leaveType === 'Half Day';
+  const isSpecialLeave = leaveType === 'Special Leave';
 
   const calculateDays = (sDate, eDate) => {
     if (!sDate || !eDate) return 1;
@@ -37,7 +44,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
   const handleStartDateChange = (val) => {
     setStartDate(val);
     setErrorMsg('');
-    if (isHalfDay) {
+    if (isHalfDay || isSpecialLeave) {
       setEndDate(val);
       setDaysCount(0.5);
     } else {
@@ -58,7 +65,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
   const handleLeaveTypeChange = (newType) => {
     setLeaveType(newType);
     setErrorMsg('');
-    if (newType === 'Half Day') {
+    if (newType === 'Half Day' || newType === 'Special Leave') {
       setDaysCount(0.5);
       if (startDate) setEndDate(startDate);
     } else {
@@ -74,17 +81,19 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
     e.preventDefault();
     if (!startDate) return;
 
-    const finalEndDate = isHalfDay ? startDate : endDate;
+    const finalEndDate = (isHalfDay || isSpecialLeave) ? startDate : endDate;
     if (!finalEndDate) return;
 
     setIsSubmitting(true);
     setErrorMsg('');
     try {
-      const finalDaysCount = isHalfDay ? 0.5 : (Number(daysCount) || 1);
+      const finalDaysCount = (isHalfDay || isSpecialLeave) ? 0.5 : (Number(daysCount) || 1);
 
       let finalReason = reason;
       if (isHalfDay) {
         finalReason = `[${halfDaySession} Half Day] ${reason}`.trim();
+      } else if (isSpecialLeave) {
+        finalReason = `[Special Leave - Every ${dayOfWeek} (${startTime} - ${endTime})] ${reason}`.trim();
       }
 
       await onSubmitLeave({
@@ -92,6 +101,10 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
         start_date: startDate,
         end_date: finalEndDate,
         days_count: finalDaysCount,
+        day_of_week: isSpecialLeave ? dayOfWeek : null,
+        start_time: isSpecialLeave ? startTime : null,
+        end_time: isSpecialLeave ? endTime : null,
+        is_recurring: isSpecialLeave ? 1 : 0,
         reason: finalReason
       });
 
@@ -99,12 +112,17 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
       const empName = user?.name || 'Employee';
       const empDept = user?.department ? ` (${user.department})` : '';
       const waNumber = '94775227748';
+      
+      const leaveDurationStr = isSpecialLeave 
+        ? `Every ${dayOfWeek} from ${startTime} to ${endTime} (Starting ${startDate})`
+        : `${startDate} to ${finalEndDate} (${finalDaysCount} ${finalDaysCount === 1 ? 'day' : 'days'})`;
+
       const waMessage = 
 `*New Leave Request Submission*
 ----------------------------------
 *Employee Name:* ${empName}${empDept}
 *Leave Type:* ${leaveType}
-*Duration:* ${startDate} to ${finalEndDate} (${finalDaysCount} ${finalDaysCount === 1 ? 'day' : 'days'})
+*Duration / Time:* ${leaveDurationStr}
 *Reason / Details:* ${finalReason || 'None'}
 ----------------------------------
 Submitted via P W Holdings Employee Management System`;
@@ -162,8 +180,58 @@ Submitted via P W Holdings Employee Management System`;
               <option value="Medical Leave">Medical Leave</option>
               <option value="Half Day">Half Day</option>
               <option value="Study Leave">Study Leave</option>
+              <option value="Special Leave">Special Leave (Weekly Recurring)</option>
             </select>
           </div>
+
+          {/* Special Leave Options (Recurring Day of Week & Time Period) */}
+          {isSpecialLeave && (
+            <div className="bg-purple-50/70 p-3.5 rounded-xl border border-purple-200/60 space-y-3">
+              <div className="flex items-center gap-2 text-purple-800 font-bold text-xs">
+                <span>🔄 Weekly Recurring Special Leave</span>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold text-purple-900 mb-1">Day of the Week</label>
+                <select
+                  value={dayOfWeek}
+                  onChange={(e) => setDayOfWeek(e.target.value)}
+                  className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
+                >
+                  <option value="Monday">Every Monday</option>
+                  <option value="Tuesday">Every Tuesday</option>
+                  <option value="Wednesday">Every Wednesday</option>
+                  <option value="Thursday">Every Thursday</option>
+                  <option value="Friday">Every Friday</option>
+                  <option value="Saturday">Every Saturday</option>
+                  <option value="Sunday">Every Sunday</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-purple-900 mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    required
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-purple-900 mb-1">End Time</label>
+                  <input
+                    type="time"
+                    required
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Half Day Session Options (Morning / Evening) */}
           {isHalfDay && (
@@ -197,9 +265,11 @@ Submitted via P W Holdings Employee Management System`;
           )}
 
           {/* Date Fields */}
-          {isHalfDay ? (
+          {(isHalfDay || isSpecialLeave) ? (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Date</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                {isSpecialLeave ? 'Effective Start Date' : 'Date'}
+              </label>
               <input
                 type="date"
                 required
