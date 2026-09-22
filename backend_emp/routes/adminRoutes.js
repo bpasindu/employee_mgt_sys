@@ -8,6 +8,20 @@ function getTodayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
+// Parse "Monday:Morning,Wednesday:Evening" → "Mon (Morning), Wed (Evening)"
+function formatSpecialDays(dayOfWeekStr) {
+  if (!dayOfWeekStr) return 'Special Leave';
+  const parts = dayOfWeekStr.split(',').map(p => p.trim());
+  const formatted = parts.map(part => {
+    if (part.includes(':')) {
+      const [day, session] = part.split(':');
+      return `${day.slice(0, 3)} (${session})`;
+    }
+    return part; // backwards compat with old format
+  });
+  return formatted.join(', ');
+}
+
 // Helper: format an employee row for admin views (no position field)
 function formatEmp(emp) {
   let displayStatus = emp.status || 'Working';
@@ -74,7 +88,7 @@ router.get('/summary', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT u.id, u.name, u.initials, u.department, u.status,
              COALESCE(dw.work_description, '') AS today_work,
-             lr.leave_type, lr.days_count, lr.day_of_week, lr.start_time, lr.end_time, lr.is_recurring, lr.reason, 
+             lr.leave_type, lr.days_count, lr.day_of_week, lr.start_time, lr.end_time, lr.special_session, lr.is_recurring, lr.reason, 
              DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date, 
              DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date
       FROM users u
@@ -90,7 +104,7 @@ router.get('/summary', async (req, res) => {
       SELECT lr.id, u.name AS employee_name, lr.leave_type,
              DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS from_date, 
              DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS to_date,
-             lr.days_count, lr.day_of_week, lr.start_time, lr.end_time, lr.is_recurring, lr.reason, lr.status,
+             lr.days_count, lr.day_of_week, lr.start_time, lr.end_time, lr.special_session, lr.is_recurring, lr.reason, lr.status,
              DATE_FORMAT(lr.created_at, '%Y-%m-%d') AS applied_date
       FROM leave_requests lr
       JOIN users u ON u.id = lr.user_id
@@ -104,7 +118,7 @@ router.get('/summary', async (req, res) => {
       to_date: r.to_date || '',
       applied_date: r.applied_date || '',
       duration: r.leave_type === 'Special Leave' && r.day_of_week
-        ? `Every ${r.day_of_week} (${r.start_time || ''} - ${r.end_time || ''})`
+        ? formatSpecialDays(r.day_of_week)
         : `${r.days_count} ${r.days_count === 1 ? 'Day' : 'Days'}`
     }));
 
@@ -112,7 +126,7 @@ router.get('/summary', async (req, res) => {
     const formatEmpWithLeave = (e) => {
       let timeSlot = 'Half Day';
       if (e.leave_type === 'Special Leave') {
-        timeSlot = e.day_of_week ? `Every ${e.day_of_week} (${e.start_time || ''} - ${e.end_time || ''})` : 'Special Leave';
+        timeSlot = e.day_of_week ? formatSpecialDays(e.day_of_week) : 'Special Leave';
       } else if (e.reason && e.reason.includes('Morning')) timeSlot = 'Morning Session';
       else if (e.reason && e.reason.includes('Evening')) timeSlot = 'Evening Session';
 
@@ -127,7 +141,7 @@ router.get('/summary', async (req, res) => {
         from_date: e.start_date || '',
         to_date: e.end_date || '',
         duration: e.leave_type === 'Special Leave' && e.day_of_week
-          ? `Every ${e.day_of_week}`
+          ? formatSpecialDays(e.day_of_week)
           : (e.days_count ? `${e.days_count} ${e.days_count === 1 ? 'Day' : 'Days'}` : 'Full Day'),
         reason: e.reason || 'Personal'
       };
@@ -229,6 +243,7 @@ router.get('/employees', async (req, res) => {
 // GET /api/admin/work-activity
 router.get('/work-activity', async (req, res) => {
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (!getIsDbConnected()) {
       return res.status(503).json({ error: 'Database not connected' });
     }
@@ -325,30 +340,43 @@ router.post('/leave/approve', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Request ID is required' });
 
   try {
-    if (!getIsDbConnected()) return res.status(503).json({ error: 'Database not connected' });
+    if (!getIsDbConnected()) await initDatabase();
 
-    const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
-    if (rows.length > 0) {
-      const lReq = rows[0];
+    if (getIsDbConnected()) {
+      const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
+      if (rows.length > 0) {
+        const lReq = rows[0];
+        const daysCount = parseFloat(lReq.days_count) || 1.0;
 
-      // Mark leave as approved
-      await pool.query('UPDATE leave_requests SET status = "Approved" WHERE id = ?', [id]);
+        // Mark leave as approved
+        await pool.query('UPDATE leave_requests SET status = ? WHERE id = ?', ['Approved', id]);
 
-      // Set employee status to On Leave
-      await pool.query('UPDATE users SET status = "On Leave" WHERE id = ?', [lReq.user_id]);
+        // Set employee status to On Leave
+        await pool.query('UPDATE users SET status = ? WHERE id = ?', ['On Leave', lReq.user_id]);
 
-      // Upsert leave balance (deduct days)
-      await pool.query(`
-        INSERT INTO leave_balances (user_id, total_days, used_days)
-        VALUES (?, 24, ?)
-        ON DUPLICATE KEY UPDATE used_days = used_days + ?
-      `, [lReq.user_id, lReq.days_count, lReq.days_count]);
+        // Upsert leave balance (deduct days)
+        await pool.query(`
+          INSERT INTO leave_balances (user_id, total_days, used_days)
+          VALUES (?, 24.00, ?)
+          ON DUPLICATE KEY UPDATE used_days = used_days + ?
+        `, [lReq.user_id, daysCount, daysCount]);
+      }
+    } else {
+      const lReq = memoryStore.pendingLeaveRequests.find(l => l.id == id);
+      if (lReq) {
+        lReq.status = 'Approved';
+        const emp = (memoryStore.allEmployees || []).find(e => e.id == lReq.user_id);
+        if (emp) emp.status = 'On Leave';
+        const daysCount = parseFloat(lReq.days_count) || 1.0;
+        memoryStore.leaveBalance.used_days = (memoryStore.leaveBalance.used_days || 0) + daysCount;
+        memoryStore.leaveBalance.available_days = Math.max(0, memoryStore.leaveBalance.total_days - memoryStore.leaveBalance.used_days);
+      }
     }
 
     res.json({ message: 'Leave request approved successfully', id });
   } catch (err) {
     console.error('Error approving leave request:', err);
-    res.status(500).json({ error: 'Failed to approve leave request' });
+    res.status(500).json({ error: 'Failed to approve leave request', details: err.message });
   }
 });
 
@@ -358,23 +386,30 @@ router.post('/leave/reject', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Request ID is required' });
 
   try {
-    if (!getIsDbConnected()) return res.status(503).json({ error: 'Database not connected' });
+    if (!getIsDbConnected()) await initDatabase();
 
-    const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
-    if (rows.length > 0) {
-      const lReq = rows[0];
+    if (getIsDbConnected()) {
+      const [rows] = await pool.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
+      if (rows.length > 0) {
+        const lReq = rows[0];
 
-      // Mark leave as rejected
-      await pool.query('UPDATE leave_requests SET status = "Rejected" WHERE id = ?', [id]);
+        // Mark leave as rejected
+        await pool.query('UPDATE leave_requests SET status = ? WHERE id = ?', ['Rejected', id]);
 
-      // Revert employee status back to Working
-      await pool.query('UPDATE users SET status = "Working" WHERE id = ? AND status = "On Leave"', [lReq.user_id]);
+        // Revert employee status back to Working
+        await pool.query('UPDATE users SET status = ? WHERE id = ? AND status = ?', ['Working', lReq.user_id, 'On Leave']);
+      }
+    } else {
+      const lReq = memoryStore.pendingLeaveRequests.find(l => l.id == id);
+      if (lReq) {
+        lReq.status = 'Rejected';
+      }
     }
 
     res.json({ message: 'Leave request rejected', id });
   } catch (err) {
     console.error('Error rejecting leave request:', err);
-    res.status(500).json({ error: 'Failed to reject leave request' });
+    res.status(500).json({ error: 'Failed to reject leave request', details: err.message });
   }
 });
 

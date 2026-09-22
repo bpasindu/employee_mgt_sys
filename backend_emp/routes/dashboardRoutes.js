@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { getIsDbConnected, memoryStore } = require('../initDb');
+const { initDatabase, getIsDbConnected, memoryStore } = require('../initDb');
 
 // Helper to format date strings YYYY-MM-DD
 function getTodayStr() {
@@ -15,6 +15,8 @@ router.get('/dashboard/summary', async (req, res) => {
 
   try {
     const todayStr = getTodayStr();
+
+    if (!getIsDbConnected()) await initDatabase();
 
     if (getIsDbConnected()) {
       const [users] = await pool.query(
@@ -32,13 +34,13 @@ router.get('/dashboard/summary', async (req, res) => {
 
       const [balances] = await pool.query('SELECT * FROM leave_balances WHERE user_id = ?', [userId]);
       const balance = balances[0] || { total_days: 24, used_days: 0 };
-      const available_days = balance.total_days - balance.used_days;
+      const available_days = Math.max(0, parseFloat(balance.total_days || 24) - parseFloat(balance.used_days || 0));
 
       const [leaves] = await pool.query(
         `SELECT id, leave_type, 
                 DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date, 
                 DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date, 
-                days_count, status, reason 
+                days_count, day_of_week, special_session, status, reason 
          FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 5`,
         [userId]
       );
@@ -75,6 +77,7 @@ router.post('/work-entry', async (req, res) => {
   const todayStr = getTodayStr();
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (getIsDbConnected()) {
       const [existing] = await pool.query(
         'SELECT id FROM daily_work_entries WHERE user_id = ? AND entry_date = ?',
@@ -114,6 +117,7 @@ router.get('/work-entry/history', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'user_id is required' });
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (getIsDbConnected()) {
       const [rows] = await pool.query(
         'SELECT * FROM daily_work_entries WHERE user_id = ? ORDER BY entry_date DESC',
@@ -219,7 +223,7 @@ async function sendLeaveNotificationEmail(userObj, leaveDetails) {
 
 // POST /api/leave/apply
 router.post('/leave/apply', async (req, res) => {
-  const { user_id, leave_type, start_date, end_date, days_count, reason, day_of_week, start_time, end_time, is_recurring } = req.body;
+  const { user_id, leave_type, start_date, end_date, days_count, reason, day_of_week, start_time, end_time, is_recurring, special_session } = req.body;
 
   if (!user_id || !leave_type || !start_date || !end_date) {
     return res.status(400).json({ error: 'user_id, leave_type, start_date, and end_date are required' });
@@ -232,59 +236,27 @@ router.post('/leave/apply', async (req, res) => {
   try {
     let applicantUser = { id: user_id, name: 'Employee', email: '', department: 'IT' };
 
+    if (!getIsDbConnected()) await initDatabase();
+
     if (getIsDbConnected()) {
       const [uRows] = await pool.query('SELECT name, email, department FROM users WHERE id = ?', [user_id]);
       if (uRows.length > 0) {
         applicantUser = uRows[0];
       }
 
-      // Check if employee already has an approved Study Leave during requested duration
-      const [overlappingStudyLeave] = await pool.query(
-        `SELECT * FROM leave_requests 
-         WHERE user_id = ? 
-           AND status = 'Approved' 
-           AND leave_type = 'Study Leave'
-           AND start_date <= ? 
-           AND end_date >= ?`,
-        [user_id, end_date, start_date]
-      );
-
-      if (overlappingStudyLeave.length > 0) {
-        const approved = overlappingStudyLeave[0];
-        const sDate = new Date(approved.start_date).toISOString().split('T')[0];
-        const eDate = new Date(approved.end_date).toISOString().split('T')[0];
-        return res.status(400).json({ 
-          error: `You already have an approved Study Leave from ${sDate} to ${eDate}. Additional leave requests cannot be submitted for this duration.` 
-        });
-      }
-
       await pool.query(
-        `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, days_count, day_of_week, start_time, end_time, is_recurring, status, reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`,
-        [user_id, leave_type, start_date, end_date, days, day_of_week || null, start_time || null, end_time || null, finalRecurring, reason || '']
+        `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, days_count, day_of_week, start_time, end_time, special_session, is_recurring, status, reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`,
+        [user_id, leave_type, start_date, end_date, days, day_of_week || null, start_time || null, end_time || null, isSpecial ? (special_session || 'Morning') : null, finalRecurring, reason || '']
       );
     } else {
       if (memoryStore.user && memoryStore.user.id === Number(user_id)) {
         applicantUser = memoryStore.user;
       }
 
-      const overlapping = memoryStore.leaveRequests.find(r => 
-        r.user_id === Number(user_id) &&
-        r.status === 'Approved' &&
-        r.leave_type === 'Study Leave' &&
-        r.start_date <= end_date &&
-        r.end_date >= start_date
-      );
-
-      if (overlapping) {
-        return res.status(400).json({ 
-          error: `You already have an approved Study Leave from ${overlapping.start_date} to ${overlapping.end_date}. Additional leave requests cannot be submitted for this duration.` 
-        });
-      }
-
       memoryStore.leaveRequests.unshift({
         id: Date.now(), user_id, leave_type, start_date, end_date,
-        days_count: days, day_of_week: day_of_week || null, start_time: start_time || null, end_time: end_time || null, is_recurring: finalRecurring, status: 'Pending', reason: reason || '',
+        days_count: days, day_of_week: day_of_week || null, start_time: start_time || null, end_time: end_time || null, special_session: isSpecial ? (special_session || 'Morning') : null, is_recurring: finalRecurring, status: 'Pending', reason: reason || '',
         created_at: new Date().toISOString()
       });
     }
@@ -314,12 +286,13 @@ router.get('/leave/history', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'user_id is required' });
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (getIsDbConnected()) {
       const [leaves] = await pool.query(
         `SELECT id, user_id, leave_type, 
                 DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date, 
                 DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date, 
-                days_count, day_of_week, start_time, end_time, is_recurring, status, reason, created_at 
+                days_count, day_of_week, start_time, end_time, special_session, is_recurring, status, reason, created_at 
          FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC`,
         [userId]
       );
@@ -339,6 +312,7 @@ router.patch('/user/status', async (req, res) => {
   if (!user_id || !status) return res.status(400).json({ error: 'user_id and status are required' });
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (getIsDbConnected()) {
       await pool.query('UPDATE users SET status = ? WHERE id = ?', [status, user_id]);
     } else {

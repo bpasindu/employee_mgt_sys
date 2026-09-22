@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { X, CalendarPlus } from 'lucide-react';
+import { X, CalendarPlus, Plus, Trash2 } from 'lucide-react';
+
+const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }) {
   const [leaveType, setLeaveType] = useState('Casual Leave');
-  const [halfDaySession, setHalfDaySession] = useState('Morning'); // 'Morning' | 'Evening'
-  const [dayOfWeek, setDayOfWeek] = useState('Monday');
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('13:00');
+  const [halfDaySession, setHalfDaySession] = useState('Morning');
+  // Special Leave: list of { day, session } entries
+  const [specialEntries, setSpecialEntries] = useState([]);
+  const [pendingDay, setPendingDay] = useState('Monday');
+  const [pendingSession, setPendingSession] = useState('Morning');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [daysCount, setDaysCount] = useState(1);
@@ -19,9 +22,9 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
   const resetForm = () => {
     setLeaveType('Casual Leave');
     setHalfDaySession('Morning');
-    setDayOfWeek('Monday');
-    setStartTime('09:00');
-    setEndTime('13:00');
+    setSpecialEntries([]);
+    setPendingDay('Monday');
+    setPendingSession('Morning');
     setStartDate('');
     setEndDate('');
     setDaysCount(1);
@@ -77,9 +80,39 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
     }
   };
 
+  const addSpecialEntry = () => {
+    // Check for duplicate day
+    const exists = specialEntries.find(e => e.day === pendingDay);
+    if (exists) {
+      setErrorMsg(`${pendingDay} is already added. Remove it first to change the session.`);
+      return;
+    }
+    setSpecialEntries(prev => [...prev, { day: pendingDay, session: pendingSession }]);
+    setErrorMsg('');
+    // Auto-advance to next available day
+    const usedDays = [...specialEntries.map(e => e.day), pendingDay];
+    const nextDay = ALL_DAYS.find(d => !usedDays.includes(d));
+    if (nextDay) setPendingDay(nextDay);
+  };
+
+  const removeSpecialEntry = (day) => {
+    setSpecialEntries(prev => prev.filter(e => e.day !== day));
+    setErrorMsg('');
+  };
+
+  // Sort entries by day order
+  const sortedEntries = [...specialEntries].sort(
+    (a, b) => ALL_DAYS.indexOf(a.day) - ALL_DAYS.indexOf(b.day)
+  );
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!startDate) return;
+
+    if (isSpecialLeave && specialEntries.length === 0) {
+      setErrorMsg('Please add at least one day for Special Leave.');
+      return;
+    }
 
     const finalEndDate = (isHalfDay || isSpecialLeave) ? startDate : endDate;
     if (!finalEndDate) return;
@@ -89,11 +122,17 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
     try {
       const finalDaysCount = (isHalfDay || isSpecialLeave) ? 0.5 : (Number(daysCount) || 1);
 
+      // Build the day_of_week string: "Monday:Morning,Wednesday:Evening"
+      const dayOfWeekStr = isSpecialLeave
+        ? sortedEntries.map(e => `${e.day}:${e.session}`).join(',')
+        : null;
+
       let finalReason = reason;
       if (isHalfDay) {
         finalReason = `[${halfDaySession} Half Day] ${reason}`.trim();
       } else if (isSpecialLeave) {
-        finalReason = `[Special Leave - Every ${dayOfWeek} (${startTime} - ${endTime})] ${reason}`.trim();
+        const entryDesc = sortedEntries.map(e => `${e.day} (${e.session})`).join(', ');
+        finalReason = `[Special Leave - ${entryDesc}] ${reason}`.trim();
       }
 
       await onSubmitLeave({
@@ -101,20 +140,20 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
         start_date: startDate,
         end_date: finalEndDate,
         days_count: finalDaysCount,
-        day_of_week: isSpecialLeave ? dayOfWeek : null,
-        start_time: isSpecialLeave ? startTime : null,
-        end_time: isSpecialLeave ? endTime : null,
+        day_of_week: dayOfWeekStr,
+        start_time: null,
+        end_time: null,
         is_recurring: isSpecialLeave ? 1 : 0,
         reason: finalReason
       });
 
-      // Construct WhatsApp message with Employee Name and open primary WhatsApp app/web
+      // Construct WhatsApp message
       const empName = user?.name || 'Employee';
       const empDept = user?.department ? ` (${user.department})` : '';
       const waNumber = '94775227748';
       
       const leaveDurationStr = isSpecialLeave 
-        ? `Every ${dayOfWeek} from ${startTime} to ${endTime} (Starting ${startDate})`
+        ? sortedEntries.map(e => `${e.day} (${e.session})`).join(', ') + ` starting ${startDate}`
         : `${startDate} to ${finalEndDate} (${finalDaysCount} ${finalDaysCount === 1 ? 'day' : 'days'})`;
 
       const waMessage = 
@@ -129,8 +168,6 @@ Submitted via P W Holdings Employee Management System`;
 
       const encodedMsg = encodeURIComponent(waMessage);
       const waUrl = `https://wa.me/${waNumber}?text=${encodedMsg}`;
-      
-      // Open in primary WhatsApp Web or Desktop application
       window.open(waUrl, '_blank', 'noopener,noreferrer');
 
       resetForm();
@@ -143,9 +180,11 @@ Submitted via P W Holdings Employee Management System`;
     }
   };
 
+  const availableDays = ALL_DAYS.filter(d => !specialEntries.find(e => e.day === d));
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 select-none">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
@@ -184,52 +223,99 @@ Submitted via P W Holdings Employee Management System`;
             </select>
           </div>
 
-          {/* Special Leave Options (Recurring Day of Week & Time Period) */}
+          {/* Special Leave: Add day + session entries one by one */}
           {isSpecialLeave && (
             <div className="bg-purple-50/70 p-3.5 rounded-xl border border-purple-200/60 space-y-3">
               <div className="flex items-center gap-2 text-purple-800 font-bold text-xs">
                 <span>🔄 Weekly Recurring Special Leave</span>
               </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-purple-900 mb-1">Day of the Week</label>
-                <select
-                  value={dayOfWeek}
-                  onChange={(e) => setDayOfWeek(e.target.value)}
-                  className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
-                >
-                  <option value="Monday">Every Monday</option>
-                  <option value="Tuesday">Every Tuesday</option>
-                  <option value="Wednesday">Every Wednesday</option>
-                  <option value="Thursday">Every Thursday</option>
-                  <option value="Friday">Every Friday</option>
-                  <option value="Saturday">Every Saturday</option>
-                  <option value="Sunday">Every Sunday</option>
-                </select>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-purple-900 mb-1">Start Time</label>
-                  <input
-                    type="time"
-                    required
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
-                  />
+              {/* Added entries list */}
+              {sortedEntries.length > 0 && (
+                <div className="space-y-1.5">
+                  {sortedEntries.map(entry => (
+                    <div
+                      key={entry.day}
+                      className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-purple-200/80 shadow-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800">{entry.day}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          entry.session === 'Morning'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                        }`}>
+                          {entry.session === 'Morning' ? '🌅' : '🌆'} {entry.session}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSpecialEntry(entry.day)}
+                        className="text-slate-400 hover:text-rose-500 transition-colors p-0.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-purple-900 mb-1">End Time</label>
-                  <input
-                    type="time"
-                    required
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
-                  />
+              )}
+
+              {/* Add new entry row */}
+              {availableDays.length > 0 && (
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-semibold text-purple-900 mb-1">Day</label>
+                    <select
+                      value={pendingDay}
+                      onChange={(e) => setPendingDay(e.target.value)}
+                      className="w-full border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
+                    >
+                      {availableDays.map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-semibold text-purple-900 mb-1">Session</label>
+                    <div className="flex bg-purple-100/60 p-0.5 rounded-lg border border-purple-200/50">
+                      <button
+                        type="button"
+                        onClick={() => setPendingSession('Morning')}
+                        className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                          pendingSession === 'Morning'
+                            ? 'bg-white text-amber-700 shadow-xs border border-amber-200'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        🌅 Morning
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingSession('Evening')}
+                        className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                          pendingSession === 'Evening'
+                            ? 'bg-white text-indigo-700 shadow-xs border border-indigo-200'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        🌆 Evening
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addSpecialEntry}
+                    className="bg-purple-600 hover:bg-purple-700 text-white p-1.5 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    title="Add day"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
+              )}
+
+              {availableDays.length === 0 && (
+                <p className="text-[10px] text-purple-600 font-medium text-center">All days have been added.</p>
+              )}
             </div>
           )}
 
@@ -310,7 +396,6 @@ Submitted via P W Holdings Employee Management System`;
                   type="number"
                   step="0.5"
                   min="0.5"
-                  max="30"
                   value={daysCount}
                   onChange={(e) => setDaysCount(e.target.value)}
                   className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold"

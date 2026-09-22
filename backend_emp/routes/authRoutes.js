@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 const pool = require('../db');
-const { getIsDbConnected, memoryStore } = require('../initDb');
+const { initDatabase, getIsDbConnected, memoryStore } = require('../initDb');
 
 // In-memory OTP store: { [email]: { otp, expiresAt, type } }
 const otpStore = {};
@@ -100,6 +100,8 @@ router.post('/login', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
+
     // Attempt database lookup first
     let user = null;
     try {
@@ -169,6 +171,7 @@ router.post('/send-otp', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (type === 'register') {
       if (getIsDbConnected()) {
         const [existing] = await pool.query('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
@@ -263,6 +266,7 @@ router.post('/verify-otp-register', async (req, res) => {
   const assignedRole = ADMIN_EMAILS.includes(cleanEmail) ? 'Admin' : 'Employee';
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (getIsDbConnected()) {
       const [existing] = await pool.query('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
       if (existing.length > 0) {
@@ -347,6 +351,7 @@ router.post('/verify-otp-reset-password', async (req, res) => {
   delete otpStore[cleanEmail];
 
   try {
+    if (!getIsDbConnected()) await initDatabase();
     if (getIsDbConnected()) {
       const [existing] = await pool.query('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
       if (existing.length === 0) {

@@ -56,8 +56,8 @@ async function initDatabase() {
       CREATE TABLE IF NOT EXISTS leave_balances (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL UNIQUE,
-        total_days INT NOT NULL DEFAULT 24,
-        used_days INT NOT NULL DEFAULT 0,
+        total_days DECIMAL(5,2) NOT NULL DEFAULT 24.00,
+        used_days DECIMAL(5,2) NOT NULL DEFAULT 0.00,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
@@ -71,9 +71,10 @@ async function initDatabase() {
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         days_count DECIMAL(4,2) NOT NULL DEFAULT 1.0,
-        day_of_week VARCHAR(20) DEFAULT NULL,
+        day_of_week VARCHAR(255) DEFAULT NULL,
         start_time TIME DEFAULT NULL,
         end_time TIME DEFAULT NULL,
+        special_session VARCHAR(20) DEFAULT NULL,
         is_recurring TINYINT(1) DEFAULT 0,
         status VARCHAR(50) DEFAULT 'Pending',
         reason TEXT,
@@ -84,10 +85,14 @@ async function initDatabase() {
 
     // Ensure columns exist on existing tables
     const alterQueries = [
-      "ALTER TABLE leave_requests ADD COLUMN day_of_week VARCHAR(20) DEFAULT NULL",
+      "ALTER TABLE leave_requests ADD COLUMN day_of_week VARCHAR(255) DEFAULT NULL",
       "ALTER TABLE leave_requests ADD COLUMN start_time TIME DEFAULT NULL",
       "ALTER TABLE leave_requests ADD COLUMN end_time TIME DEFAULT NULL",
-      "ALTER TABLE leave_requests ADD COLUMN is_recurring TINYINT(1) DEFAULT 0"
+      "ALTER TABLE leave_requests ADD COLUMN special_session VARCHAR(20) DEFAULT NULL",
+      "ALTER TABLE leave_requests ADD COLUMN is_recurring TINYINT(1) DEFAULT 0",
+      "ALTER TABLE leave_requests MODIFY COLUMN day_of_week VARCHAR(255) DEFAULT NULL",
+      "ALTER TABLE leave_balances MODIFY COLUMN total_days DECIMAL(5,2) NOT NULL DEFAULT 24.00",
+      "ALTER TABLE leave_balances MODIFY COLUMN used_days DECIMAL(5,2) NOT NULL DEFAULT 0.00"
     ];
     for (const q of alterQueries) {
       try { await connection.query(q); } catch (e) { /* Column may already exist */ }

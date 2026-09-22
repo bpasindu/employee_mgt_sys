@@ -14,7 +14,11 @@ export default function RecentLeaveRequestsCard({ requests = [] }) {
           {requests.map((req) => {
             const isSpecial = req.leave_type === 'Special Leave';
             const daysText = isSpecial && req.day_of_week 
-              ? `Every ${req.day_of_week} (${req.start_time || ''} - ${req.end_time || ''})`
+              ? req.day_of_week.split(',').map(p => {
+                  const t = p.trim();
+                  if (t.includes(':')) { const [d, s] = t.split(':'); return `${d.slice(0,3)} (${s})`; }
+                  return t;
+                }).join(', ')
               : `${req.days_count} ${req.days_count === 1 ? 'Day' : 'Days'}`;
             const dateFormatted = req.start_date ? req.start_date.split('T')[0] : '';
 

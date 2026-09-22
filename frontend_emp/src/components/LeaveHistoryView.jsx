@@ -62,7 +62,11 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave }) {
                 const sDate = leave.start_date ? leave.start_date.split('T')[0] : '';
                 const eDate = leave.end_date ? leave.end_date.split('T')[0] : '';
                 const durationText = isSpecial && leave.day_of_week
-                  ? `Every ${leave.day_of_week} (${leave.start_time || ''} - ${leave.end_time || ''}) starting ${sDate}`
+                  ? leave.day_of_week.split(',').map(p => {
+                      const t = p.trim();
+                      if (t.includes(':')) { const [d, s] = t.split(':'); return `${d.slice(0,3)} (${s})`; }
+                      return t;
+                    }).join(', ') + ` starting ${sDate}`
                   : `${sDate} to ${eDate}`;
 
                 return (
