@@ -1,0 +1,14 @@
+{
+  "buildCommand": "cd frontend_emp && npm run build",
+  "outputDirectory": "frontend_emp/dist",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
