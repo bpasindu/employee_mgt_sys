@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd frontend_emp && npm run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "frontend_emp/dist",
   "rewrites": [
     {
