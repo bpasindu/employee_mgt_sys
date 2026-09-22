@@ -82,8 +82,13 @@ async function initDatabase() {
   }
 }
 
+if (require.main === module) {
+  initDatabase().then(() => process.exit(0));
+}
+
 module.exports = {
   initDatabase,
   getIsDbConnected: () => isDbConnected,
   memoryStore
 };
+

@@ -9,7 +9,6 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import GreetingBanner from './components/GreetingBanner';
 import DailyWorkCard from './components/DailyWorkCard';
-import LeaveBalanceCard from './components/LeaveBalanceCard';
 import RecentLeaveRequestsCard from './components/RecentLeaveRequestsCard';
 import ApplyLeaveModal from './components/ApplyLeaveModal';
 import WorkHistoryView from './components/WorkHistoryView';
@@ -31,6 +30,7 @@ export default function App() {
   // Navigation View: 'login' | 'admin' | 'employee'
   const [currentView, setCurrentView] = useState('login');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Logged in User State — restored from localStorage on mount
   const [currentUser, setCurrentUser] = useState(() => {
@@ -207,6 +207,7 @@ export default function App() {
     const nextMode = currentView === 'admin' ? 'employee' : 'admin';
     setCurrentView(nextMode);
     setActiveTab(nextMode === 'admin' ? 'admin-dashboard' : 'dashboard');
+    setIsMobileOpen(false);
   };
 
   const adminTitles = {
@@ -238,6 +239,8 @@ export default function App() {
           setActiveTab={setActiveTab}
           adminUser={adminUser}
           onLogout={handleLogout}
+          isMobileOpen={isMobileOpen}
+          setIsMobileOpen={setIsMobileOpen}
         />
 
         <div className="flex-1 flex flex-col min-w-0">
@@ -246,9 +249,10 @@ export default function App() {
             adminUser={adminUser}
             currentViewMode={currentView}
             onToggleViewMode={toggleViewMode}
+            onMenuClick={() => setIsMobileOpen(true)}
           />
 
-          <main className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
             {activeTab === 'admin-dashboard' && (
               <div>
                 <div className="mb-6">
@@ -299,7 +303,7 @@ export default function App() {
             {activeTab === 'leave-calendar' && <LeaveCalendarView />}
 
             {activeTab === 'settings' && (
-              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-xs max-w-4xl mx-auto">
+              <div className="bg-white rounded-2xl p-6 sm:p-12 text-center border border-slate-200 shadow-xs max-w-4xl mx-auto">
                 <h3 className="text-lg font-bold text-slate-800 capitalize">{adminTitles[activeTab]}</h3>
                 <p className="text-xs text-slate-500 mt-1">This section is active and configured for system administration.</p>
               </div>
@@ -319,6 +323,8 @@ export default function App() {
         onOpenApplyLeave={() => setIsApplyLeaveOpen(true)}
         user={user}
         onLogout={handleLogout}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -326,9 +332,10 @@ export default function App() {
           title={employeeTitles[activeTab] || 'Dashboard'}
           user={user}
           onToggleViewMode={currentUser?.role === 'Admin' ? toggleViewMode : undefined}
+          onMenuClick={() => setIsMobileOpen(true)}
         />
 
-        <main className="flex-1 p-6 sm:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {activeTab === 'dashboard' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               <div className="lg:col-span-8 space-y-6">
@@ -336,7 +343,6 @@ export default function App() {
                 <DailyWorkCard initialWork={todayWork} onSaveWork={handleSaveWork} />
               </div>
               <div className="lg:col-span-4 space-y-6">
-                <LeaveBalanceCard leaveBalance={leaveBalance} />
                 <RecentLeaveRequestsCard requests={recentLeaveRequests} />
               </div>
             </div>
@@ -358,4 +364,5 @@ export default function App() {
       />
     </div>
   );
+
 }

@@ -71,8 +71,9 @@ export default function AdminAllEmployeesView() {
       {loading ? (
         <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-sm">Loading workforce directory...</div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-600">
+
             <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 uppercase tracking-wider font-semibold">
               <tr>
                 <th className="px-6 py-3.5">Employee</th>
