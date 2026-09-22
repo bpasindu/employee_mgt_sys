@@ -120,7 +120,17 @@ export default function App() {
     try {
       const res = await API.get(`/dashboard/summary?user_id=${uid}`);
       if (res.data) {
-        if (res.data.user) setUser(prev => ({ ...prev, ...res.data.user }));
+        if (res.data.user) {
+          setUser(prev => {
+            const merged = { ...prev };
+            Object.keys(res.data.user).forEach(k => {
+              if (res.data.user[k] !== undefined && res.data.user[k] !== null && res.data.user[k] !== '') {
+                merged[k] = res.data.user[k];
+              }
+            });
+            return merged;
+          });
+        }
         if (res.data.todayWork !== undefined) setTodayWork(res.data.todayWork);
         if (res.data.leaveBalance) setLeaveBalance(res.data.leaveBalance);
         if (res.data.recentLeaveRequests) setRecentLeaveRequests(res.data.recentLeaveRequests);

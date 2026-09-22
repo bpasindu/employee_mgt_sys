@@ -118,11 +118,11 @@ export default function Sidebar({ activeTab, setActiveTab, onOpenApplyLeave, use
           <div className="bg-[#0c1f3a] rounded-2xl p-3 flex items-center justify-between border border-slate-800/90 shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-full bg-slate-100 text-[#07162c] font-bold text-xs flex items-center justify-center shrink-0 shadow-inner">
-                {user?.initials || 'KP'}
+                {user?.initials || (user?.name ? user.name.slice(0, 2).toUpperCase() : 'EP')}
               </div>
               <div className="min-w-0">
                 <h4 className="text-white text-xs font-semibold truncate leading-tight">
-                  {user?.name || 'Kasun Perera'}
+                  {user?.name || 'Employee'}
                 </h4>
               </div>
             </div>

@@ -50,10 +50,11 @@ router.get('/dashboard/summary', async (req, res) => {
         recentLeaveRequests: leaves
       });
     } else {
-      const todayEntryObj = memoryStore.workEntries.find(e => e.entry_date === todayStr);
+      const foundMemUser = (memoryStore.allEmployees || []).find(e => e.id === userId) || memoryStore.user;
+      const todayEntryObj = memoryStore.workEntries.find(e => e.user_id === userId && e.entry_date === todayStr) || memoryStore.workEntries.find(e => e.entry_date === todayStr);
       const available_days = memoryStore.leaveBalance.total_days - memoryStore.leaveBalance.used_days;
       return res.json({
-        user: memoryStore.user,
+        user: foundMemUser,
         todayWork: todayEntryObj ? todayEntryObj.work_description : '',
         leaveBalance: { ...memoryStore.leaveBalance, available_days },
         recentLeaveRequests: memoryStore.leaveRequests
