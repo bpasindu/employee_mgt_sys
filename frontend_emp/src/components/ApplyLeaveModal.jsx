@@ -150,7 +150,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
       // Construct WhatsApp message
       const empName = user?.name || 'Employee';
       const empDept = user?.department ? ` (${user.department})` : '';
-      const waNumber = '94775227748';
+      const waNumbers = ['94775227748', '94777885883'];
       
       const leaveDurationStr = isSpecialLeave 
         ? sortedEntries.map(e => `${e.day} (${e.session})`).join(', ') + ` starting ${startDate}`
@@ -167,8 +167,13 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user }
 Submitted via P W Holdings Employee Management System`;
 
       const encodedMsg = encodeURIComponent(waMessage);
-      const waUrl = `https://wa.me/${waNumber}?text=${encodedMsg}`;
-      window.open(waUrl, '_blank', 'noopener,noreferrer');
+      
+      waNumbers.forEach((num, index) => {
+        const waUrl = `https://wa.me/${num}?text=${encodedMsg}`;
+        setTimeout(() => {
+          window.open(waUrl, '_blank', 'noopener,noreferrer');
+        }, index * 400);
+      });
 
       resetForm();
       onClose();
