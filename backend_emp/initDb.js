@@ -11,12 +11,17 @@ const memoryStore = {
 };
 
 let isDbConnected = false;
+let initPromise = null;
 
 async function initDatabase() {
-  try {
-    const connection = await pool.getConnection();
-    isDbConnected = true;
-    console.log('Connected to MySQL Database successfully.');
+  if (isDbConnected) return true;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    try {
+      const connection = await pool.getConnection();
+      isDbConnected = true;
+      console.log('Connected to MySQL Database successfully.');
 
     // Create users table
     await connection.query(`
@@ -97,11 +102,16 @@ async function initDatabase() {
 
     connection.release();
     console.log('All tables verified/created successfully.');
+    return true;
   } catch (err) {
     isDbConnected = false;
+    initPromise = null;
     console.warn('MySQL Connection Warning:', err.message);
     console.log('Using in-memory fallback store for API endpoints.');
+    return false;
   }
+  })();
+  return initPromise;
 }
 
 if (require.main === module) {
