@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { getIsDbConnected, memoryStore } = require('../initDb');
+const { initDatabase, getIsDbConnected, memoryStore } = require('../initDb');
 
 // Helper to format date strings YYYY-MM-DD
 function getTodayStr() {
