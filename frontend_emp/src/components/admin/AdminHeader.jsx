@@ -68,7 +68,7 @@ export default function AdminHeader({ title, adminUser, currentViewMode, onToggl
             className="flex items-center gap-1.5 cursor-pointer pl-1 hover:opacity-85 transition-opacity"
           >
             <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border border-blue-200 shadow-xs">
-              {adminUser?.initials || 'NS'}
+              {adminUser?.initials || 'AD'}
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
           </div>
@@ -76,7 +76,7 @@ export default function AdminHeader({ title, adminUser, currentViewMode, onToggl
           {isMenuOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-20 text-xs font-medium text-slate-700">
               <div className="px-3 py-2 border-b border-slate-100">
-                <p className="font-bold text-slate-900">{adminUser?.name || 'Nadeesha Silva'}</p>
+                <p className="font-bold text-slate-900">{adminUser?.name || 'Administrator'}</p>
               </div>
               <button
                 onClick={() => {

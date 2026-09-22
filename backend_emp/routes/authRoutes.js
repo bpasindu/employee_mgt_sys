@@ -131,6 +131,24 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email address or password' });
     }
 
+    const ADMIN_EMAILS = [
+      'hashan@pwholdings.lk',
+      'nishani@pwholdings.lk',
+      'channa@pwholdings.lk',
+      'pasindu.buddhima@pwholdings.lk'
+    ];
+
+    if (ADMIN_EMAILS.includes(cleanEmail)) {
+      user.role = 'Admin';
+      if (getIsDbConnected()) {
+        try {
+          await pool.query("UPDATE users SET role = 'Admin' WHERE LOWER(email) = ?", [cleanEmail]);
+        } catch (e) {
+          console.error('Failed to update DB role for admin:', e.message);
+        }
+      }
+    }
+
     delete user.password;
     return res.json({ message: 'Login successful', user });
   } catch (err) {
@@ -236,6 +254,14 @@ router.post('/verify-otp-register', async (req, res) => {
   const initials = getInitials(name);
   const dept = department || 'IT';
 
+  const ADMIN_EMAILS = [
+    'hashan@pwholdings.lk',
+    'nishani@pwholdings.lk',
+    'channa@pwholdings.lk',
+    'pasindu.buddhima@pwholdings.lk'
+  ];
+  const assignedRole = ADMIN_EMAILS.includes(cleanEmail) ? 'Admin' : 'Employee';
+
   try {
     if (getIsDbConnected()) {
       const [existing] = await pool.query('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
@@ -245,8 +271,8 @@ router.post('/verify-otp-register', async (req, res) => {
 
       const [result] = await pool.query(
         `INSERT INTO users (name, department, email, password, initials, status, role)
-         VALUES (?, ?, ?, ?, ?, 'Working', 'Employee')`,
-        [name, dept, cleanEmail, password, initials]
+         VALUES (?, ?, ?, ?, ?, 'Working', ?)`,
+        [name, dept, cleanEmail, password, initials, assignedRole]
       );
 
       const newUserId = result.insertId;
@@ -263,7 +289,7 @@ router.post('/verify-otp-register', async (req, res) => {
         email: cleanEmail,
         initials,
         status: 'Working',
-        role: 'Employee'
+        role: assignedRole
       };
 
       return res.json({ message: 'Email verified! Account created successfully', user: newUser });
@@ -277,7 +303,7 @@ router.post('/verify-otp-register', async (req, res) => {
         initials,
         status: 'Working',
         updated_ago: 'Just now',
-        role: 'Employee',
+        role: assignedRole,
         today_work: ''
       };
 

@@ -88,6 +88,13 @@ async function initDatabase() {
       try { await connection.query(q); } catch (e) { /* Column may already exist */ }
     }
 
+    // Auto-grant Admin role for designated admin emails
+    await connection.query(`
+      UPDATE users 
+      SET role = 'Admin' 
+      WHERE LOWER(email) IN ('hashan@pwholdings.lk', 'nishani@pwholdings.lk', 'channa@pwholdings.lk', 'pasindu.buddhima@pwholdings.lk')
+    `);
+
     connection.release();
     console.log('All tables verified/created successfully.');
   } catch (err) {

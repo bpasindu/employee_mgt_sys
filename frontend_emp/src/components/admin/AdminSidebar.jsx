@@ -151,11 +151,11 @@ export default function AdminSidebar({ activeTab, setActiveTab, adminUser, onLog
           <div className="bg-[#0c1f3a] rounded-2xl p-3 flex items-center justify-between border border-slate-800/90 shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-full bg-slate-100 text-[#07162c] font-bold text-xs flex items-center justify-center shrink-0 shadow-inner">
-                {adminUser?.initials || 'NS'}
+                {adminUser?.initials || 'AD'}
               </div>
               <div className="min-w-0">
                 <h4 className="text-white text-xs font-semibold truncate leading-tight">
-                  {adminUser?.name || 'Nadeesha Silva'}
+                  {adminUser?.name || 'Administrator'}
                 </h4>
               </div>
             </div>

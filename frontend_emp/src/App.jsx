@@ -54,18 +54,18 @@ export default function App() {
 
   // Admin Dashboard State
   const [adminUser, setAdminUser] = useState({
-    name: 'Nadeesha Silva',
+    name: 'Administrator',
     title: 'System Administrator',
-    initials: 'NS',
+    initials: 'AD',
     role: 'Admin'
   });
   const [adminStats, setAdminStats] = useState({
-    total_employees: 20,
-    working_today: 14,
-    on_leave_today: 3,
-    half_day: 2,
-    study_leave: 1,
-    pending_requests: 4
+    total_employees: 0,
+    working_today: 0,
+    on_leave_today: 0,
+    half_day: 0,
+    study_leave: 0,
+    pending_requests: 0
   });
   const [workingWorkforce, setWorkingWorkforce] = useState([]);
   const [todaysLeave, setTodaysLeave] = useState([]);

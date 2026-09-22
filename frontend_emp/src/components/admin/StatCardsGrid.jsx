@@ -12,7 +12,7 @@ export default function StatCardsGrid({ stats }) {
   const cards = [
     {
       title: 'Total Employees',
-      value: stats?.total_employees ?? 20,
+      value: stats?.total_employees ?? 0,
       icon: Users,
       bgColor: 'bg-blue-50',
       iconColor: 'text-blue-600',
@@ -20,7 +20,7 @@ export default function StatCardsGrid({ stats }) {
     },
     {
       title: 'Working Today',
-      value: stats?.working_today ?? 14,
+      value: stats?.working_today ?? 0,
       icon: Briefcase,
       bgColor: 'bg-emerald-50',
       iconColor: 'text-emerald-600',
@@ -28,7 +28,7 @@ export default function StatCardsGrid({ stats }) {
     },
     {
       title: 'On Leave Today',
-      value: stats?.on_leave_today ?? 3,
+      value: stats?.on_leave_today ?? 0,
       icon: Plane,
       bgColor: 'bg-rose-50',
       iconColor: 'text-rose-500',
@@ -36,7 +36,7 @@ export default function StatCardsGrid({ stats }) {
     },
     {
       title: 'Half Day',
-      value: stats?.half_day ?? 2,
+      value: stats?.half_day ?? 0,
       icon: Clock,
       bgColor: 'bg-amber-50',
       iconColor: 'text-amber-600',
@@ -44,7 +44,7 @@ export default function StatCardsGrid({ stats }) {
     },
     {
       title: 'Study Leave',
-      value: stats?.study_leave ?? 1,
+      value: stats?.study_leave ?? 0,
       icon: GraduationCap,
       bgColor: 'bg-sky-50',
       iconColor: 'text-sky-600',
@@ -52,7 +52,7 @@ export default function StatCardsGrid({ stats }) {
     },
     {
       title: 'Pending Requests',
-      value: stats?.pending_requests ?? 4,
+      value: stats?.pending_requests ?? 0,
       icon: CalendarCheck,
       bgColor: 'bg-orange-50',
       iconColor: 'text-orange-600',
