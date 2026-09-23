@@ -59,6 +59,7 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave }) {
             <tbody className="divide-y divide-slate-100 font-medium">
               {leaves.map((leave) => {
                 const isSpecial = leave.leave_type === 'Special Leave';
+                const isPowerCut = leave.leave_type === 'Power Cut';
                 const sDate = leave.start_date ? leave.start_date.split('T')[0] : '';
                 const eDate = leave.end_date ? leave.end_date.split('T')[0] : '';
                 const durationText = isSpecial && leave.day_of_week
@@ -67,7 +68,7 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave }) {
                       if (t.includes(':')) { const [d, s] = t.split(':'); return `${d.slice(0,3)} (${s})`; }
                       return t;
                     }).join(', ') + ` starting ${sDate}`
-                  : `${sDate} to ${eDate}`;
+                  : (sDate === eDate ? sDate : `${sDate} to ${eDate}`);
 
                 return (
                   <tr key={leave.id || Math.random()} className="hover:bg-slate-50/60 transition-colors">
@@ -75,6 +76,10 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave }) {
                       {isSpecial ? (
                         <span className="bg-purple-50 text-purple-700 border border-purple-200/80 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1">
                           🔄 Special Leave
+                        </span>
+                      ) : isPowerCut ? (
+                        <span className="bg-amber-50 text-amber-800 border border-amber-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shadow-2xs">
+                          ⚡ Power Cut
                         </span>
                       ) : leave.leave_type}
                     </td>

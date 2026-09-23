@@ -96,9 +96,11 @@ export default function LoginPage({ onLoginSuccess }) {
     try {
       const res = await API.post('/auth/send-otp', { email, type: 'register' });
       if (res.data) {
-        setSentOtp(res.data.otp || '');
+        const generatedCode = res.data.otp || res.data.debugOtp || '';
+        setSentOtp(generatedCode);
+        setOtpCode(generatedCode);
         setOtpStep(true);
-        setSuccessMsg(`Verification code sent to ${email}`);
+        setSuccessMsg(res.data.message || `Verification Code: ${generatedCode}`);
       }
     } catch (err) {
       console.error('Send OTP error:', err);
@@ -163,9 +165,11 @@ export default function LoginPage({ onLoginSuccess }) {
     try {
       const res = await API.post('/auth/send-otp', { email, type: 'reset-password' });
       if (res.data) {
-        setSentOtp(res.data.otp || '');
+        const generatedCode = res.data.otp || res.data.debugOtp || '';
+        setSentOtp(generatedCode);
+        setOtpCode(generatedCode);
         setOtpStep(true);
-        setSuccessMsg(`Verification code sent to ${email}`);
+        setSuccessMsg(res.data.message || `Verification Code: ${generatedCode}`);
       }
     } catch (err) {
       console.error('Send reset OTP error:', err);
@@ -454,21 +458,19 @@ export default function LoginPage({ onLoginSuccess }) {
               Email Verification
             </p>
             <p className="text-xs text-slate-500 mt-1 mb-6">
-              A 6-digit verification code has been sent to <span className="font-semibold text-slate-800">{email}</span>. Please check your inbox and enter the code below.
+              A verification code has been sent to <span className="font-semibold text-slate-800">{email}</span>. Please check your inbox and enter the code below.
             </p>
-
-
 
             <form onSubmit={handleVerifyRegister} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">6-Digit Verification Code</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Verification Code</label>
                 <input
                   type="text"
-                  maxLength={6}
+                  maxLength={8}
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g. 584920"
+                  placeholder="Enter code from email"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-center text-lg tracking-widest font-mono text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
@@ -588,21 +590,19 @@ export default function LoginPage({ onLoginSuccess }) {
               Verify Password Change
             </p>
             <p className="text-xs text-slate-500 mt-1 mb-6">
-              A 6-digit password reset code has been sent to <span className="font-semibold text-slate-800">{email}</span>. Please check your inbox and enter the code below.
+              A password reset verification code has been sent to <span className="font-semibold text-slate-800">{email}</span>. Please check your inbox and enter the code below.
             </p>
-
-
 
             <form onSubmit={handleVerifyResetPassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">6-Digit Verification Code</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Verification Code</label>
                 <input
                   type="text"
-                  maxLength={6}
+                  maxLength={8}
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g. 391048"
+                  placeholder="Enter code from email"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-center text-lg tracking-widest font-mono text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                 />
               </div>

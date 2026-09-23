@@ -1,24 +1,10 @@
-const mysql = require('mysql2/promise');
+const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
+const supabaseUrl = process.env.SUPABASE_URL || 'https://mbblahvstusfzlbzztrp.supabase.co';
+const supabaseKey = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1iYmxhaHZzdHVzZnpsYnp6dHJwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDE0NzQwOCwiZXhwIjoyMTA1NzIzNDA4fQ.jAFcONpAoiHHtvxDlSusBXCfL_DZIbCo6e-oYMWeU8w';
 
-const poolConfig = {
-  host: process.env.DB_HOST || 'mysql-bd1ecd6-buddhimapw-8a8e.i.aivencloud.com',
-  port: Number(process.env.DB_PORT) || 28005,
-  user: process.env.DB_USER || 'avnadmin',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || 'defaultdb',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-};
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-if (process.env.DB_SSL === 'true' || !process.env.DB_SSL || poolConfig.host.includes('aivencloud.com')) {
-  poolConfig.ssl = { rejectUnauthorized: false };
-}
-
-
-const pool = mysql.createPool(poolConfig);
-
-module.exports = pool;
+module.exports = supabase;

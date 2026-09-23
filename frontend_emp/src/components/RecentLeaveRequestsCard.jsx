@@ -13,6 +13,7 @@ export default function RecentLeaveRequestsCard({ requests = [] }) {
         <div className="divide-y divide-slate-100">
           {requests.map((req) => {
             const isSpecial = req.leave_type === 'Special Leave';
+            const isPowerCut = req.leave_type === 'Power Cut';
             const daysText = isSpecial && req.day_of_week 
               ? req.day_of_week.split(',').map(p => {
                   const t = p.trim();
@@ -29,6 +30,10 @@ export default function RecentLeaveRequestsCard({ requests = [] }) {
                     {isSpecial ? (
                       <span className="text-purple-700 font-bold flex items-center gap-1">
                         🔄 Special Leave
+                      </span>
+                    ) : isPowerCut ? (
+                      <span className="text-amber-800 font-bold flex items-center gap-1">
+                        ⚡ Power Cut
                       </span>
                     ) : req.leave_type}
                   </h4>

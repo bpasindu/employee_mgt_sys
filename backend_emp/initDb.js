@@ -1,131 +1,22 @@
-const pool = require('./db');
-
-// Minimal fallback store — no mock data
-const memoryStore = {
-  user: { id: null, name: '', title: '', department: 'IT', email: '', initials: '', status: 'Working', role: 'Employee' },
-  workEntries: [],
-  leaveBalance: { user_id: null, total_days: 24, used_days: 0, available_days: 24 },
-  leaveRequests: [],
-  allEmployees: [],
-  pendingLeaveRequests: []
-};
+const supabase = require('./db');
 
 let isDbConnected = false;
-let initPromise = null;
 
 async function initDatabase() {
-  if (isDbConnected) return true;
-  if (initPromise) return initPromise;
-
-  initPromise = (async () => {
-    try {
-      const connection = await pool.getConnection();
-      isDbConnected = true;
-      console.log('Connected to MySQL Database successfully.');
-
-    // Create users table
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        department VARCHAR(100) DEFAULT 'IT',
-        email VARCHAR(100) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL DEFAULT '123',
-        initials VARCHAR(10) NOT NULL,
-        status VARCHAR(50) DEFAULT 'Working',
-        role VARCHAR(50) DEFAULT 'Employee',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create daily_work_entries table
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS daily_work_entries (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        entry_date DATE NOT NULL,
-        work_description TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    // Create leave_balances table
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS leave_balances (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL UNIQUE,
-        total_days DECIMAL(5,2) NOT NULL DEFAULT 24.00,
-        used_days DECIMAL(5,2) NOT NULL DEFAULT 0.00,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    // Create leave_requests table
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS leave_requests (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        leave_type VARCHAR(50) NOT NULL,
-        start_date DATE NOT NULL,
-        end_date DATE NOT NULL,
-        days_count DECIMAL(4,2) NOT NULL DEFAULT 1.0,
-        day_of_week VARCHAR(255) DEFAULT NULL,
-        start_time TIME DEFAULT NULL,
-        end_time TIME DEFAULT NULL,
-        special_session VARCHAR(20) DEFAULT NULL,
-        is_recurring TINYINT(1) DEFAULT 0,
-        status VARCHAR(50) DEFAULT 'Pending',
-        reason TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    // Ensure columns exist on existing tables
-    const alterQueries = [
-      "ALTER TABLE leave_requests ADD COLUMN day_of_week VARCHAR(255) DEFAULT NULL",
-      "ALTER TABLE leave_requests ADD COLUMN start_time TIME DEFAULT NULL",
-      "ALTER TABLE leave_requests ADD COLUMN end_time TIME DEFAULT NULL",
-      "ALTER TABLE leave_requests ADD COLUMN special_session VARCHAR(20) DEFAULT NULL",
-      "ALTER TABLE leave_requests ADD COLUMN is_recurring TINYINT(1) DEFAULT 0",
-      "ALTER TABLE leave_requests MODIFY COLUMN day_of_week VARCHAR(255) DEFAULT NULL",
-      "ALTER TABLE leave_balances MODIFY COLUMN total_days DECIMAL(5,2) NOT NULL DEFAULT 24.00",
-      "ALTER TABLE leave_balances MODIFY COLUMN used_days DECIMAL(5,2) NOT NULL DEFAULT 0.00"
-    ];
-    for (const q of alterQueries) {
-      try { await connection.query(q); } catch (e) { /* Column may already exist */ }
-    }
-
-    // Auto-grant Admin role for designated admin emails
-    await connection.query(`
-      UPDATE users 
-      SET role = 'Admin' 
-      WHERE LOWER(email) IN ('hashan@pwholdings.lk', 'nishani@pwholdings.lk', 'channa@pwholdings.lk', 'pasindu.buddhima@pwholdings.lk')
-    `);
-
-    connection.release();
-    console.log('All tables verified/created successfully.');
+  try {
+    const { data, error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+    if (error) throw error;
+    isDbConnected = true;
+    console.log('Connected to Supabase Database successfully.');
     return true;
   } catch (err) {
     isDbConnected = false;
-    initPromise = null;
-    console.warn('MySQL Connection Warning:', err.message);
-    console.log('Using in-memory fallback store for API endpoints.');
+    console.warn('Supabase Connection Warning:', err.message);
     return false;
   }
-  })();
-  return initPromise;
-}
-
-if (require.main === module) {
-  initDatabase().then(() => process.exit(0));
 }
 
 module.exports = {
   initDatabase,
-  getIsDbConnected: () => isDbConnected,
-  memoryStore
+  getIsDbConnected: () => isDbConnected
 };
-
