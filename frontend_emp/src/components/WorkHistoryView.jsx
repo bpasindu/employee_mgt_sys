@@ -13,9 +13,11 @@ export default function WorkHistoryView({ userId }) {
   const fetchHistory = async () => {
     try {
       const res = await API.get(`/work-entry/history?user_id=${userId}`);
-      setEntries(res.data || []);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.entries || []);
+      setEntries(list);
     } catch (err) {
       console.error('Failed to fetch work history:', err);
+      setEntries([]);
     } finally {
       setLoading(false);
     }

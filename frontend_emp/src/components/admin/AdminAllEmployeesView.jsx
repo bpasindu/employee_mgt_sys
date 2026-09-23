@@ -15,9 +15,11 @@ export default function AdminAllEmployeesView() {
   const fetchEmployees = async () => {
     try {
       const res = await API.get('/admin/employees');
-      setEmployees(res.data || []);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.employees || []);
+      setEmployees(list);
     } catch (err) {
       console.error('Error fetching all employees:', err);
+      setEmployees([]);
     } finally {
       setLoading(false);
     }

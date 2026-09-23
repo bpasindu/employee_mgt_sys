@@ -42,13 +42,13 @@ const API = {
       if (path === '/work-entry/history') {
         const userId = params.user_id;
         const data = await dashboardService.getWorkHistory(userId);
-        return { data };
+        return { data: data?.entries || data || [] };
       }
 
       if (path === '/leave/history') {
         const userId = params.user_id;
         const data = await dashboardService.getLeaveHistory(userId);
-        return { data };
+        return { data: data?.requests || data || [] };
       }
 
       if (path === '/admin/summary') {
@@ -58,19 +58,19 @@ const API = {
 
       if (path === '/admin/employees') {
         const data = await adminService.getAdminEmployees();
-        return { data };
+        return { data: data?.employees || data || [] };
       }
 
       if (path === '/admin/work-activity') {
         const data = await adminService.getAdminWorkActivity();
-        return { data };
+        return { data: data?.activities || data || [] };
       }
 
       if (path === '/admin/leave-calendar') {
         const year = parseInt(params.year) || new Date().getFullYear();
         const month = parseInt(params.month) || (new Date().getMonth() + 1);
         const data = await adminService.getAdminLeaveCalendar(year, month);
-        return { data };
+        return { data: data?.leaves || data || [] };
       }
 
       throw new Error(`Unhandled GET route: ${path}`);

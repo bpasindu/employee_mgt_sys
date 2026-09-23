@@ -13,9 +13,11 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave }) {
   const fetchLeaveHistory = async () => {
     try {
       const res = await API.get(`/leave/history?user_id=${userId}`);
-      setLeaves(res.data || []);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.requests || res.data?.leaves || []);
+      setLeaves(list);
     } catch (err) {
       console.error('Failed to fetch leave history:', err);
+      setLeaves([]);
     } finally {
       setLoading(false);
     }

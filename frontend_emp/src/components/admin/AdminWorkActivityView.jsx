@@ -16,9 +16,11 @@ export default function AdminWorkActivityView() {
   const fetchWorkActivity = async () => {
     try {
       const res = await API.get('/admin/work-activity');
-      setActivities(res.data || []);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.activities || []);
+      setActivities(list);
     } catch (err) {
       console.error('Error fetching work activity:', err);
+      setActivities([]);
     } finally {
       setLoading(false);
     }
@@ -26,13 +28,17 @@ export default function AdminWorkActivityView() {
 
   const departments = ['All', 'IT', 'Finance'];
 
-  const filtered = activities.filter((act) => {
-    const matchesSearch =
-      act.employee_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.work_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.department.toLowerCase().includes(searchTerm.toLowerCase());
+  const filtered = (Array.isArray(activities) ? activities : []).filter((act) => {
+    const empName = act.employee_name || act.name || '';
+    const workDesc = act.work_description || '';
+    const dept = act.department || '';
 
-    const matchesDept = deptFilter === 'All' || act.department.toLowerCase() === deptFilter.toLowerCase();
+    const matchesSearch =
+      empName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workDesc.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      dept.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesDept = deptFilter === 'All' || dept.toLowerCase() === deptFilter.toLowerCase();
 
     const matchesDate = !dateFilter || act.entry_date === dateFilter;
 
@@ -118,7 +124,7 @@ export default function AdminWorkActivityView() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900 text-sm">{item.employee_name}</h4>
+                      <h4 className="font-bold text-slate-900 text-sm">{item.employee_name || item.name}</h4>
                       <span className="bg-slate-100 text-slate-600 text-[10px] font-semibold px-2 py-0.5 rounded-md border border-slate-200/80">
                         {item.department}
                       </span>
