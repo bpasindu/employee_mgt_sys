@@ -659,6 +659,7 @@ export const adminService = {
       id: l.id,
       user_id: l.user_id,
       name: l.users?.name || 'Employee',
+      employee_name: l.users?.name || 'Employee',
       initials: l.users?.initials || getInitials(l.users?.name),
       department: l.users?.department || 'IT',
       leave_type: l.leave_type,

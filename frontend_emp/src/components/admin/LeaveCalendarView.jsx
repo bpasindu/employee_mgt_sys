@@ -34,9 +34,11 @@ export default function LeaveCalendarView() {
       setLoading(true);
       try {
         const res = await API.get(`/admin/leave-calendar?year=${year}&month=${month + 1}`);
-        setLeaveEvents(res.data || []);
+        const events = Array.isArray(res.data) ? res.data : (res.data?.leaves || []);
+        setLeaveEvents(events);
       } catch (err) {
         console.error('Error fetching leave calendar data:', err);
+        setLeaveEvents([]);
       } finally {
         setLoading(false);
       }
@@ -72,6 +74,7 @@ export default function LeaveCalendarView() {
 
   // Check if an employee is on leave on a given date string YYYY-MM-DD
   const getLeavesForDate = (dateStr) => {
+    if (!Array.isArray(leaveEvents)) return [];
     return leaveEvents.filter(event => {
       return dateStr >= event.start_date && dateStr <= event.end_date;
     });
