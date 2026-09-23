@@ -210,16 +210,32 @@ async function sendLeaveNotificationEmail(userObj, leaveDetails) {
     await transporter.sendMail({
       from: `"PeopleOps Leave System" <${process.env.EMAIL_USER}>`,
       to: 'hashan@pwholdings.lk',
-      cc: ['nishani@pwholdings.lk', 'channa@pwholdings.lk'],
+      cc: ['nishani@pwholdings.lk', 'channa@pwholdings.lk', 'pasindu.buddhima@pwholdings.lk'],
       subject: `Leave Request: ${userObj.name || 'Employee'} - ${leaveDetails.leave_type} (${leaveDetails.start_date})`,
       html: htmlContent
     });
 
-    console.log(`Leave notification email sent to hashan@pwholdings.lk with CC to nishani@pwholdings.lk, channa@pwholdings.lk`);
+    console.log(`✅ Leave notification email sent to hashan@pwholdings.lk with CC to nishani@pwholdings.lk, channa@pwholdings.lk, pasindu.buddhima@pwholdings.lk`);
   } catch (err) {
     console.error('Error sending leave notification email:', err);
   }
 }
+
+// POST /api/send-leave-email
+router.post('/send-leave-email', async (req, res) => {
+  const { user, leaveDetails } = req.body;
+  if (!user || !leaveDetails) {
+    return res.status(400).json({ error: 'user and leaveDetails are required' });
+  }
+
+  try {
+    await sendLeaveNotificationEmail(user, leaveDetails);
+    res.json({ message: 'Leave notification email sent successfully' });
+  } catch (err) {
+    console.error('Error in /send-leave-email:', err);
+    res.status(500).json({ error: err.message || 'Failed to send email' });
+  }
+});
 
 // POST /api/leave/apply
 router.post('/leave/apply', async (req, res) => {
