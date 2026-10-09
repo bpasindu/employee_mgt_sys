@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowLeft, Edit3, Briefcase, FileText, Calendar, Camera } from 'lucide-react';
+import { ArrowLeft, Edit3, Briefcase, FileText, Calendar, Camera, RefreshCw } from 'lucide-react';
 import { formatDateDot, calculateTenure } from '../../utils/dateUtils';
 
-export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPhotoModal }) {
+export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPhotoModal, onSyncZoho, syncingZoho }) {
   const name = profile?.name || 'Employee';
   const designation = profile?.designation || '';
   const cardDesignation = profile?.card_designation || '';
@@ -146,9 +146,21 @@ export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPh
           )}
         </div>
 
-        {/* Edit Profile Action Button */}
-        {onOpenEditModal && (
-          <div className="shrink-0 self-center sm:self-start">
+        {/* Action Buttons: Edit Profile & Sync Zoho Books */}
+        <div className="shrink-0 self-center sm:self-start flex flex-wrap items-center gap-2 justify-center sm:justify-end">
+          {onSyncZoho && (
+            <button
+              onClick={onSyncZoho}
+              disabled={syncingZoho}
+              className="bg-blue-600/30 hover:bg-blue-600/45 text-blue-200 hover:text-white border border-blue-500/40 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              title="Fetch latest profile data and documents from Zoho Books"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncingZoho ? 'animate-spin text-white' : 'text-blue-400'}`} />
+              <span>{syncingZoho ? 'Syncing...' : 'Sync Zoho'}</span>
+            </button>
+          )}
+
+          {onOpenEditModal && (
             <button
               onClick={onOpenEditModal}
               className="bg-white/10 hover:bg-white/20 active:scale-95 text-white border border-white/20 text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
@@ -156,8 +168,8 @@ export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPh
               <Edit3 className="w-3.5 h-3.5" />
               <span>Edit Profile</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

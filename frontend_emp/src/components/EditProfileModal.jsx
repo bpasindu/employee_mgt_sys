@@ -173,6 +173,15 @@ export default function EditProfileModal({ isOpen, onClose, profile, onProfileUp
           </button>
         </div>
 
+        {/* Zoho Books Live Sync Indicator */}
+        <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-2.5 mt-3 flex items-center justify-between text-[11px] text-blue-900 font-medium">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+            <span>Profile updates automatically synchronize with Zoho Books Custom Module & PWH System</span>
+          </div>
+          <span className="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px] shrink-0">Zoho Synced</span>
+        </div>
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           {/* Server Error Alert */}

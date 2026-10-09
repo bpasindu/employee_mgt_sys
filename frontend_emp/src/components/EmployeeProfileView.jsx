@@ -20,6 +20,30 @@ export default function EmployeeProfileView({ onBack, user, onSelectEmployee, on
   const [activeSubTab, setActiveSubTab] = useState('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [syncingZoho, setSyncingZoho] = useState(false);
+  const [zohoSyncMsg, setZohoSyncMsg] = useState(null);
+
+  const handleSyncZoho = async () => {
+    setSyncingZoho(true);
+    setZohoSyncMsg(null);
+    try {
+      const targetId = user?.id || profile?.id;
+      const res = await API.post('/api/zoho/employee/sync', { user_id: targetId });
+      if (res.data?.success && res.data?.updated_profile) {
+        setProfile(res.data.updated_profile);
+        if (onParentProfileUpdated) onParentProfileUpdated(res.data.updated_profile);
+        setZohoSyncMsg({ type: 'success', text: 'Profile details successfully updated from Zoho Books!' });
+      } else {
+        setZohoSyncMsg({ type: 'info', text: res.data?.message || 'Sync complete.' });
+      }
+    } catch (err) {
+      console.error('Zoho sync error:', err);
+      setZohoSyncMsg({ type: 'error', text: err.response?.data?.error || err.message || 'Failed to sync with Zoho Books' });
+    } finally {
+      setSyncingZoho(false);
+      setTimeout(() => setZohoSyncMsg(null), 5000);
+    }
+  };
 
   useEffect(() => {
     fetchProfile();
@@ -123,7 +147,28 @@ export default function EmployeeProfileView({ onBack, user, onSelectEmployee, on
         onBack={onBack}
         onOpenEditModal={handleOpenEditModal}
         onOpenPhotoModal={handleOpenPhotoModal}
+        onSyncZoho={handleSyncZoho}
+        syncingZoho={syncingZoho}
       />
+
+      {/* Zoho Books Sync Status Alert */}
+      {zohoSyncMsg && (
+        <div className={`p-3.5 rounded-xl text-xs font-semibold flex items-center justify-between border shadow-2xs ${
+          zohoSyncMsg.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+            : zohoSyncMsg.type === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-blue-50 border-blue-200 text-blue-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            <RefreshCw className={`w-4 h-4 shrink-0 ${zohoSyncMsg.type === 'success' ? 'text-emerald-600' : 'text-blue-600'}`} />
+            <span>{zohoSyncMsg.text}</span>
+          </div>
+          <button onClick={() => setZohoSyncMsg(null)} className="p-1 hover:opacity-75 cursor-pointer">
+            <AlertCircle className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Navigation Sub-Tabs */}
       <div className="border-b border-slate-200/80 flex items-center gap-2 overflow-x-auto no-scrollbar">
@@ -220,7 +265,7 @@ export default function EmployeeProfileView({ onBack, user, onSelectEmployee, on
 
       {/* TAB CONTENT 5: DOCUMENTS */}
       {activeSubTab === 'documents' && (
-        <DocumentsTab userId={profile?.id} />
+        <DocumentsTab userId={profile?.id} profile={profile} />
       )}
 
       {/* Modals */}

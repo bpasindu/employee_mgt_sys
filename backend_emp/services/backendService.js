@@ -1,7 +1,7 @@
 const supabase = require('../db');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
-const { syncEmployeeToZoho } = require('./zohoService');
+const { syncEmployeeToZoho, updateZohoEmployeeRecord } = require('./zohoService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pwholdings_secure_jwt_secret_key_2026';
 const ADMIN_EMAILS = [
@@ -13,6 +13,10 @@ const ADMIN_EMAILS = [
 
 // In-memory OTP storage: { [email]: { otp, expiresAt, type } }
 const otpStore = {};
+
+// In-memory cache for work activity
+let cachedWorkActivityData = null;
+let cachedWorkActivityExpiresAt = 0;
 
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Colombo';
 
@@ -904,6 +908,10 @@ const dashboardService = {
         .insert([payload]);
     }
 
+    // Invalidate work activity cache on new submission
+    cachedWorkActivityData = null;
+    cachedWorkActivityExpiresAt = 0;
+
     return { message: 'Work entry updated successfully', work_description: finalDescription, clients: clientList };
   },
 
@@ -1616,37 +1624,70 @@ const adminService = {
   },
 
   async getAdminWorkActivity() {
-    const { data: entries, error } = await supabase
-      .from('daily_work_entries')
-      .select(`
-        id, user_id, entry_date, work_description, created_at, updated_at,
-        users (id, name, initials, department, photo_url, designation, card_designation, dob, date_joined, phone, personal_email, email, emp_code)
-      `)
-      .order('entry_date', { ascending: false })
-      .order('created_at', { ascending: false });
+    if (cachedWorkActivityData && Date.now() < cachedWorkActivityExpiresAt) {
+      return cachedWorkActivityData;
+    }
+    try {
+      // 1. Fetch users and work entries separately in parallel to avoid heavy nested PostgREST joins that trigger statement timeouts
+      const [usersRes, entriesRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, name, initials, department, photo_url, designation, card_designation, dob, date_joined, phone, personal_email, email, emp_code'),
+        supabase
+          .from('daily_work_entries')
+          .select('id, user_id, entry_date, work_description, created_at, updated_at')
+          .order('entry_date', { ascending: false })
+          .limit(500)
+      ]);
 
-    if (error) throw new Error(error.message);
+      let entries = entriesRes.data || [];
+      if (entriesRes.error) {
+        console.warn('Failed primary order query for work entries, trying fallback:', entriesRes.error.message);
+        // Fallback: try without sorting if compound index is missing
+        const { data: fallbackEntries, error: fbErr } = await supabase
+          .from('daily_work_entries')
+          .select('id, user_id, entry_date, work_description, created_at, updated_at')
+          .limit(300);
+        if (fbErr) throw new Error(fbErr.message);
+        entries = (fallbackEntries || []).sort((a, b) => new Date(b.entry_date || b.created_at) - new Date(a.entry_date || a.created_at));
+      }
 
-    const activities = (entries || []).map(e => ({
-      id: e.id,
-      user_id: e.user_id,
-      employee_name: e.users?.name || 'Employee',
-      initials: e.users?.initials || 'EP',
-      photo_url: e.users?.photo_url || null,
-      department: e.users?.department || 'IT',
-      designation: e.users?.designation || e.users?.card_designation || null,
-      date_joined: e.users?.date_joined || null,
-      dob: e.users?.dob || null,
-      phone: e.users?.phone || null,
-      email: e.users?.email || e.users?.personal_email || null,
-      emp_code: e.users?.emp_code || null,
-      work_date: e.entry_date,
-      work_description: e.work_description || 'No description provided.',
-      created_at: e.created_at,
-      updated_at: e.updated_at
-    }));
+      const userMap = {};
+      (usersRes.data || []).forEach(u => {
+        userMap[u.id] = u;
+      });
 
-    return { activities };
+      const activities = entries.map(e => {
+        const u = userMap[e.user_id] || {};
+        const empName = u.name || 'Employee';
+        return {
+          id: e.id,
+          user_id: e.user_id,
+          employee_name: empName,
+          initials: u.initials || empName.slice(0, 2).toUpperCase(),
+          photo_url: u.photo_url || null,
+          department: u.department || 'IT',
+          designation: u.designation || u.card_designation || null,
+          date_joined: u.date_joined || null,
+          dob: u.dob || null,
+          phone: u.phone || null,
+          email: u.email || u.personal_email || null,
+          emp_code: u.emp_code || null,
+          work_date: e.entry_date,
+          work_description: e.work_description || 'No description provided.',
+          created_at: e.created_at,
+          updated_at: e.updated_at
+        };
+      });
+
+      const result = { activities };
+      cachedWorkActivityData = result;
+      cachedWorkActivityExpiresAt = Date.now() + 30 * 1000;
+      return result;
+    } catch (err) {
+      console.error('getAdminWorkActivity error:', err.message);
+      throw new Error(err.message || 'Failed to fetch work activity');
+    }
   },
 
   async getAdminLeaveCalendar(year, month) {
@@ -1654,43 +1695,56 @@ const adminService = {
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    const { data: leaves, error } = await supabase
-      .from('leave_requests')
-      .select(`
-        id, user_id, leave_type, start_date, end_date, days_count,
-        day_of_week, start_time, end_time, special_session, is_recurring,
-        status, reason, created_at,
-        users (id, name, initials, department, photo_url)
-      `)
-      .eq('status', 'Approved')
-      .or(`and(start_date.lte.${endDate},end_date.gte.${startDate}),is_recurring.eq.true`);
+    const [leavesRes, usersRes] = await Promise.all([
+      supabase
+        .from('leave_requests')
+        .select(`
+          id, user_id, leave_type, start_date, end_date, days_count,
+          day_of_week, start_time, end_time, special_session, is_recurring,
+          status, reason, created_at
+        `)
+        .eq('status', 'Approved')
+        .or(`and(start_date.lte.${endDate},end_date.gte.${startDate}),is_recurring.eq.true`),
+      supabase
+        .from('users')
+        .select('id, name, initials, department, photo_url')
+    ]);
 
-    if (error) throw new Error(error.message);
+    if (leavesRes.error) throw new Error(leavesRes.error.message);
 
-    const formattedLeaves = (leaves || []).map(l => ({
-      id: l.id,
-      user_id: l.user_id,
-      employee_name: l.users?.name || 'Employee',
-      initials: l.users?.initials || 'EP',
-      photo_url: l.users?.photo_url || null,
-      department: l.users?.department || 'IT',
-      leave_type: l.leave_type,
-      start_date: l.start_date ? l.start_date.split('T')[0] : '',
-      end_date: l.end_date ? l.end_date.split('T')[0] : '',
-      days_count: l.days_count,
-      day_of_week: l.day_of_week,
-      start_time: l.start_time,
-      end_time: l.end_time,
-      special_session: l.special_session,
-      is_recurring: l.is_recurring,
-      reason: l.reason,
-      status: l.status,
-      duration: l.leave_type === 'Special Leave' && l.day_of_week
-        ? formatSpecialDays(l.day_of_week)
-        : (l.leave_type === 'Short Leave' && l.start_time && l.end_time)
-          ? `${formatTime12(l.start_time)} - ${formatTime12(l.end_time)}`
-          : `${l.days_count} days`
-    }));
+    const userMap = {};
+    (usersRes.data || []).forEach(u => {
+      userMap[u.id] = u;
+    });
+
+    const formattedLeaves = (leavesRes.data || []).map(l => {
+      const u = userMap[l.user_id] || {};
+      const empName = u.name || 'Employee';
+      return {
+        id: l.id,
+        user_id: l.user_id,
+        employee_name: empName,
+        initials: u.initials || empName.slice(0, 2).toUpperCase(),
+        photo_url: u.photo_url || null,
+        department: u.department || 'IT',
+        leave_type: l.leave_type,
+        start_date: l.start_date ? l.start_date.split('T')[0] : '',
+        end_date: l.end_date ? l.end_date.split('T')[0] : '',
+        days_count: l.days_count,
+        day_of_week: l.day_of_week,
+        start_time: l.start_time,
+        end_time: l.end_time,
+        special_session: l.special_session,
+        is_recurring: l.is_recurring,
+        reason: l.reason,
+        status: l.status,
+        duration: l.leave_type === 'Special Leave' && l.day_of_week
+          ? formatSpecialDays(l.day_of_week)
+          : (l.leave_type === 'Short Leave' && l.start_time && l.end_time)
+            ? `${formatTime12(l.start_time)} - ${formatTime12(l.end_time)}`
+            : `${l.days_count} days`
+      };
+    });
 
     return { leaves: formattedLeaves };
   },
@@ -2212,6 +2266,21 @@ const profileService = {
 
     const updatedProfile = await this.getMyProfile(resolvedId);
     if (updatedProfile) {
+      if (updatedProfile.email) {
+        updateZohoEmployeeRecord(updatedProfile.email, {
+          name: updatedProfile.name,
+          emp_code: updatedProfile.emp_code,
+          dob: updatedProfile.dob,
+          date_joined: updatedProfile.date_joined,
+          designation: updatedProfile.designation,
+          card_designation: updatedProfile.card_designation,
+          phone: updatedProfile.phone,
+          address: updatedProfile.address
+        }).catch(err => {
+          console.warn(`Zoho Books cm_employee update warning for ${updatedProfile.email}:`, err.message);
+        });
+      }
+
       syncEmployeeToZoho(updatedProfile).then(res => {
         if (!res.success) {
           console.error(`Zoho sync failed for updated profile ${resolvedId}:`, res.error);
