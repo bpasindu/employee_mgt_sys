@@ -3,12 +3,13 @@ import API from '../../api';
 import { 
   Search, Calendar, Briefcase, User, Filter, ArrowLeft, 
   Clock, ChevronRight, FileText, CheckCircle2, UserCheck, 
-  Building2, Sparkles, Phone, ExternalLink 
+  Building2, Sparkles, Phone, ExternalLink, RefreshCw, AlertCircle 
 } from 'lucide-react';
 
 export default function AdminWorkActivityView({ onSelectEmployee }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
@@ -19,12 +20,15 @@ export default function AdminWorkActivityView({ onSelectEmployee }) {
   }, []);
 
   const fetchWorkActivity = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const res = await API.get('/admin/work-activity');
       const list = Array.isArray(res.data) ? res.data : (res.data?.activities || []);
       setActivities(list);
     } catch (err) {
       console.error('Error fetching work activity:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to fetch work activity');
       setActivities([]);
     } finally {
       setLoading(false);
@@ -421,6 +425,21 @@ export default function AdminWorkActivityView({ onSelectEmployee }) {
           <div className="py-16 text-center text-slate-400 text-xs font-medium flex flex-col items-center gap-2">
             <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <span>Loading work activity logs...</span>
+          </div>
+        ) : error ? (
+          <div className="py-12 text-center">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3 border border-rose-100">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-slate-800 mb-1">Failed to load work activity</p>
+            <p className="text-[11px] text-slate-500 mb-4 max-w-sm mx-auto">{error}</p>
+            <button
+              onClick={fetchWorkActivity}
+              className="px-4 py-2 bg-[#022851] text-white rounded-xl text-xs font-semibold hover:bg-[#03376e] transition-colors inline-flex items-center gap-2 cursor-pointer shadow-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry Loading</span>
+            </button>
           </div>
         ) : filteredActivities.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-xs font-medium">

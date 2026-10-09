@@ -9,6 +9,10 @@ let cachedToken = null;
 let tokenExpiresAt = 0; // Timestamp in ms
 let workingAccountsUrl = null;
 let workingApiDomain = null;
+let cachedClientsData = null;
+let cachedClientsExpiresAt = 0;
+let cachedAnalyticsData = null;
+let cachedAnalyticsExpiresAt = 0;
 
 // Default fallback client list when Zoho Books credentials are not yet set up
 const DEFAULT_ZOHO_CLIENTS = [
@@ -256,6 +260,12 @@ async function syncEmployeeToZohoBooks(employee, isRetry = false) {
       if (empData.card_designation) {
         payload.cf_card_designation = empData.card_designation;
       }
+      if (empData.phone) {
+        payload.cf_phone = empData.phone;
+      }
+      if (empData.address) {
+        payload.cf_adderss = empData.address;
+      }
 
       const endpoint = `${apiDomain}/books/v3/cm_employee?organization_id=${orgId}`;
 
@@ -429,6 +439,11 @@ async function getZohoClients() {
   const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
   const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
 
+  const now = Date.now();
+  if (cachedClientsData && now < cachedClientsExpiresAt) {
+    return cachedClientsData;
+  }
+
   if (!clientId || !clientSecret || !refreshToken || !orgId) {
     return {
       is_live: false,
@@ -533,10 +548,12 @@ async function getZohoClients() {
       email: c.email || ''
     }));
 
-    return {
+    cachedClientsData = {
       is_live: true,
       clients: clients
     };
+    cachedClientsExpiresAt = Date.now() + 5 * 60 * 1000; // Cache for 5 mins
+    return cachedClientsData;
   } catch (err) {
     console.error('Zoho API Error:', err.message);
     return {
@@ -551,17 +568,39 @@ async function getZohoClients() {
  * Get Client Work Analytics for Admin Reports
  */
 async function getClientAnalytics() {
+  const now = Date.now();
+  if (cachedAnalyticsData && now < cachedAnalyticsExpiresAt) {
+    return cachedAnalyticsData;
+  }
+
   const { clients } = await getZohoClients();
 
-  const { data: entries, error } = await supabase
-    .from('daily_work_entries')
-    .select(`
-      id, user_id, entry_date, work_description, created_at,
-      users (id, name, initials, department)
-    `)
-    .order('entry_date', { ascending: false });
+  // Decouple daily_work_entries and users to avoid slow nested PostgREST joins that cause statement timeouts
+  const [entriesRes, usersRes] = await Promise.all([
+    supabase
+      .from('daily_work_entries')
+      .select('id, user_id, entry_date, work_description, created_at')
+      .order('entry_date', { ascending: false })
+      .limit(1000),
+    supabase
+      .from('users')
+      .select('id, name, initials, department')
+  ]);
 
-  if (error) throw new Error(error.message);
+  if (entriesRes.error) {
+    console.error('Error fetching work entries for client analytics:', entriesRes.error.message);
+    throw new Error(entriesRes.error.message);
+  }
+
+  const userMap = {};
+  (usersRes.data || []).forEach(u => {
+    userMap[u.id] = u;
+  });
+
+  const entries = (entriesRes.data || []).map(e => ({
+    ...e,
+    users: userMap[e.user_id] || null
+  }));
 
   const clientStatsMap = {};
   
@@ -689,18 +728,391 @@ async function getClientAnalytics() {
     logs: stat.logs
   })).sort((a, b) => b.total_work_entries - a.total_work_entries);
 
-  return {
+  const result = {
     total_clients: clients.length,
     active_clients_worked: clientAnalyticsList.filter(c => c.total_work_entries > 0).length,
     analytics: clientAnalyticsList
+  };
+  cachedAnalyticsData = result;
+  cachedAnalyticsExpiresAt = Date.now() + 60 * 1000;
+  return result;
+}
+
+/**
+ * Retrieve Zoho Books Employee Custom Module ('cm_employee') record by Email
+ */
+async function getZohoEmployeeByEmail(email) {
+  if (!email) return null;
+  const targetEmail = email.trim().toLowerCase();
+  const token = await getZohoAccessToken();
+  const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
+  const apiDomain = workingApiDomain || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
+
+  let page = 1;
+  let hasMore = true;
+  let matchedSummary = null;
+
+  while (hasMore && page <= 5) {
+    const url = `${apiDomain}/books/v3/cm_employee?organization_id=${orgId}&page=${page}&per_page=200`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}` }
+    });
+    const data = await res.json();
+    if (data.code === 0 && Array.isArray(data.module_records)) {
+      matchedSummary = data.module_records.find(r => 
+        (r.cf_email || '').trim().toLowerCase() === targetEmail
+      );
+      if (matchedSummary) break;
+      hasMore = data.page_context ? data.page_context.has_more_page : false;
+      page++;
+    } else {
+      break;
+    }
+  }
+
+  if (!matchedSummary) {
+    return null;
+  }
+
+  // Fetch full details of the employee record by module_record_id to get all custom field attachments & layout values
+  const detailUrl = `${apiDomain}/books/v3/cm_employee/${matchedSummary.module_record_id}?organization_id=${orgId}`;
+  const detailRes = await fetch(detailUrl, {
+    headers: { 'Authorization': `Zoho-oauthtoken ${token}` }
+  });
+  const detailData = await detailRes.json();
+  const record = detailData.module_record_hash || detailData.module_record || matchedSummary;
+
+  return {
+    module_record_id: matchedSummary.module_record_id,
+    emp_code: record.cf_emp_code || '',
+    name: record.cf_name || '',
+    dob: record.cf_dob || '',
+    date_joined: record.cf_date_of_joined || '',
+    designation: record.cf_designation || '',
+    card_designation: record.cf_card_designation || '',
+    email: record.cf_email || '',
+    phone: record.cf_phone || '',
+    address: record.cf_adderss || '',
+    documents: {
+      nic: record.cf_attachment ? {
+        document_id: record.cf_attachment,
+        file_name: record.cf_attachment_formatted || 'Copy of NIC',
+        doc_type: 'nic',
+        label: 'Copy of NIC'
+      } : null,
+      ol_certificate: record.cf_attachment_2 ? {
+        document_id: record.cf_attachment_2,
+        file_name: record.cf_attachment_2_formatted || 'Educational Certificate (O/L)',
+        doc_type: 'ol_certificate',
+        label: 'Educational Certificates (O/L)'
+      } : null,
+      al_certificate: record.cf_attachment_3 ? {
+        document_id: record.cf_attachment_3,
+        file_name: record.cf_attachment_3_formatted || 'Educational Certificate (A/L)',
+        doc_type: 'al_certificate',
+        label: 'Educational Certificates (A/L)'
+      } : null,
+      other_certificate: record.cf_attachment_4 ? {
+        document_id: record.cf_attachment_4,
+        file_name: record.cf_attachment_4_formatted || 'Other Qualification Certificate',
+        doc_type: 'other_certificate',
+        label: 'Other Qualification Certificates'
+      } : null
+    },
+    raw: record
+  };
+}
+
+/**
+ * Update an existing Zoho Books Employee Custom Module record by Email
+ */
+async function updateZohoEmployeeRecord(email, updates = {}) {
+  if (!email) {
+    return { success: false, message: 'Email is required' };
+  }
+  const token = await getZohoAccessToken();
+  const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
+  const apiDomain = workingApiDomain || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
+
+  let existing = await getZohoEmployeeByEmail(email);
+  if (!existing) {
+    return await createZohoEmployeeRecord({
+      ...updates,
+      email: email
+    });
+  }
+
+  const payload = {};
+  if (updates.name !== undefined) payload.cf_name = updates.name;
+  if (updates.emp_code !== undefined && updates.emp_code) payload.cf_emp_code = updates.emp_code;
+  if (updates.dob !== undefined) payload.cf_dob = updates.dob;
+  if (updates.date_joined !== undefined || updates.date_of_joined !== undefined || updates.joined_date !== undefined) {
+    payload.cf_date_of_joined = updates.date_joined || updates.date_of_joined || updates.joined_date;
+  }
+  if (updates.designation !== undefined) payload.cf_designation = updates.designation;
+  if (updates.card_designation !== undefined) payload.cf_card_designation = updates.card_designation;
+  if (updates.phone !== undefined) payload.cf_phone = updates.phone;
+  if (updates.address !== undefined) payload.cf_adderss = updates.address;
+
+  const endpoint = `${apiDomain}/books/v3/cm_employee/${existing.module_record_id}?organization_id=${orgId}`;
+  const res = await fetch(endpoint, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const resData = await res.json();
+  if (resData.code === 0 || resData.module_record) {
+    return {
+      success: true,
+      message: 'Zoho Books employee updated successfully',
+      data: resData.module_record
+    };
+  } else {
+    return {
+      success: false,
+      message: resData.message || 'Failed to update Zoho Books employee'
+    };
+  }
+}
+
+/**
+ * Upload a document directly to Zoho Books custom module record and associate with custom field
+ * docType: 'nic' | 'ol_certificate' | 'al_certificate' | 'other_certificate'
+ */
+async function uploadZohoEmployeeDocument(email, docType, fileBuffer, fileName, mimeType) {
+  if (!email || !docType || !fileBuffer) {
+    throw new Error('Email, docType, and file data are required');
+  }
+
+  const fieldMap = {
+    nic: 'cf_attachment',
+    ol_certificate: 'cf_attachment_2',
+    al_certificate: 'cf_attachment_3',
+    other_certificate: 'cf_attachment_4'
+  };
+
+  const targetField = fieldMap[docType];
+  if (!targetField) {
+    throw new Error(`Invalid docType: ${docType}. Must be one of: nic, ol_certificate, al_certificate, other_certificate`);
+  }
+
+  const token = await getZohoAccessToken();
+  const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
+  const apiDomain = workingApiDomain || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
+
+  let existing = await getZohoEmployeeByEmail(email);
+  if (!existing) {
+    const createRes = await createZohoEmployeeRecord({ email });
+    if (!createRes.success || !createRes.data) {
+      throw new Error(`Failed to create employee in Zoho Books: ${createRes.message}`);
+    }
+    existing = { module_record_id: createRes.data.module_record_id };
+  }
+
+  const recordId = existing.module_record_id;
+
+  // 1. Upload attachment to Zoho Books
+  const formData = new FormData();
+  const blob = new Blob([fileBuffer], { type: mimeType || 'application/octet-stream' });
+  formData.append('attachment', blob, fileName);
+
+  const attachUrl = `${apiDomain}/books/v3/cm_employee/${recordId}/attachment?organization_id=${orgId}`;
+  const attachRes = await fetch(attachUrl, {
+    method: 'POST',
+    headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+    body: formData
+  });
+
+  const attachData = await attachRes.json();
+  if (attachData.code !== 0 || !Array.isArray(attachData.documents) || attachData.documents.length === 0) {
+    throw new Error(attachData.message || 'Failed to upload attachment to Zoho Books');
+  }
+
+  const uploadedDoc = attachData.documents[0];
+  const documentId = uploadedDoc.document_id;
+
+  // 2. Associate the document_id with the corresponding custom field
+  const putUrl = `${apiDomain}/books/v3/cm_employee/${recordId}?organization_id=${orgId}`;
+  const putRes = await fetch(putUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      [targetField]: documentId
+    })
+  });
+
+  const putData = await putRes.json();
+  if (putData.code !== 0) {
+    console.warn(`Attached document ${documentId} but field association returned:`, putData.message);
+  }
+
+  return {
+    success: true,
+    document_id: documentId,
+    file_name: uploadedDoc.file_name || fileName,
+    file_size: uploadedDoc.file_size,
+    doc_type: docType,
+    field_name: targetField,
+    zoho_record_id: recordId
+  };
+}
+
+/**
+ * Remove document from a custom field in Zoho Books
+ */
+async function deleteZohoEmployeeDocument(email, docType) {
+  const fieldMap = {
+    nic: 'cf_attachment',
+    ol_certificate: 'cf_attachment_2',
+    al_certificate: 'cf_attachment_3',
+    other_certificate: 'cf_attachment_4'
+  };
+
+  const targetField = fieldMap[docType];
+  if (!targetField) throw new Error(`Invalid docType: ${docType}`);
+
+  const existing = await getZohoEmployeeByEmail(email);
+  if (!existing) return { success: true };
+
+  const token = await getZohoAccessToken();
+  const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
+  const apiDomain = workingApiDomain || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
+
+  const putUrl = `${apiDomain}/books/v3/cm_employee/${existing.module_record_id}?organization_id=${orgId}`;
+  await fetch(putUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      [targetField]: ''
+    })
+  });
+
+  return { success: true };
+}
+
+/**
+ * Fetch document stream/buffer from Zoho Books documents endpoint
+ */
+async function getZohoDocument(documentId) {
+  if (!documentId) throw new Error('Document ID is required');
+  const token = await getZohoAccessToken();
+  const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
+  const apiDomain = workingApiDomain || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
+
+  const url = `${apiDomain}/books/v3/documents/${documentId}?organization_id=${orgId}`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Zoho-oauthtoken ${token}` }
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to download Zoho document (HTTP ${res.status})`);
+  }
+
+  const contentType = res.headers.get('content-type') || 'application/octet-stream';
+  const arrayBuffer = await res.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    contentType
+  };
+}
+
+/**
+ * Sync Zoho Books custom module data into local Supabase user profile
+ */
+async function syncZohoEmployeeToLocalProfile(userId) {
+  if (!userId) throw new Error('User ID required');
+
+  // 1. Get local user
+  const { data: user, error: userErr } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (userErr || !user) {
+    throw new Error('Local user profile not found');
+  }
+
+  const email = user.email;
+  if (!email) {
+    return { success: false, message: 'User has no email address configured' };
+  }
+
+  // 2. Fetch Zoho Books employee
+  const zohoEmp = await getZohoEmployeeByEmail(email);
+  if (!zohoEmp) {
+    return {
+      success: false,
+      message: `No matching employee found in Zoho Books with email "${email}"`,
+      matched: false
+    };
+  }
+
+  // 3. Prepare payload from Zoho Books fields to update local user
+  const updatePayload = {};
+  if (zohoEmp.emp_code && !user.emp_code) {
+    updatePayload.emp_code = zohoEmp.emp_code;
+  }
+  if (zohoEmp.dob) {
+    updatePayload.dob = zohoEmp.dob.split('T')[0];
+  }
+  if (zohoEmp.date_joined) {
+    updatePayload.date_joined = zohoEmp.date_joined.split('T')[0];
+  }
+  if (zohoEmp.designation) {
+    updatePayload.designation = zohoEmp.designation;
+  }
+  if (zohoEmp.card_designation) {
+    updatePayload.card_designation = zohoEmp.card_designation;
+  }
+  if (zohoEmp.phone && !user.phone) {
+    updatePayload.phone = zohoEmp.phone;
+  }
+  if (zohoEmp.address && !user.address) {
+    updatePayload.address = zohoEmp.address;
+  }
+
+  if (Object.keys(updatePayload).length > 0) {
+    await supabase.from('users').update(updatePayload).eq('id', userId);
+  }
+
+  const { data: updatedUser } = await supabase
+    .from('users')
+    .select('id, emp_code, designation, card_designation, employment_type, dob, gender, nic, address, phone, personal_email, school_attended, tshirt_size, date_joined, photo_url, department, status, role, email, name, initials')
+    .eq('id', userId)
+    .single();
+
+  return {
+    success: true,
+    matched: true,
+    zoho_data: zohoEmp,
+    updated_profile: updatedUser || user
   };
 }
 
 module.exports = {
   getZohoAccessToken,
+  createZohoEmployeeRecord,
+  getZohoEmployeeByEmail,
+  updateZohoEmployeeRecord,
+  uploadZohoEmployeeDocument,
+  deleteZohoEmployeeDocument,
+  getZohoDocument,
+  syncZohoEmployeeToLocalProfile,
   syncEmployeeToZohoBooks,
   syncEmployeeToZohoCrm,
   syncEmployeeToZoho,
   getZohoClients,
   getClientAnalytics
 };
+
