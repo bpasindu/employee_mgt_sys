@@ -54,6 +54,7 @@ export default function AdminAllEmployeesView({ employees: initialEmployees = []
     'Short Leave', 
     'Study Leave',
     'Power Cut',
+    'Weather Condition',
     'Special Leave'
   ];
   const workFilterOptions = ['All Work Status', 'Work Submitted', 'Pending Description'];
@@ -90,6 +91,8 @@ export default function AdminAllEmployeesView({ employees: initialEmployees = []
       matchesStatus = (emp.leave_type === 'Study Leave') || (emp.status && emp.status.toLowerCase().includes('study leave'));
     } else if (statusFilter === 'Power Cut') {
       matchesStatus = (emp.leave_type === 'Power Cut') || (emp.status && emp.status.toLowerCase().includes('power cut'));
+    } else if (statusFilter === 'Weather Condition') {
+      matchesStatus = (emp.leave_type === 'Weather Condition') || (emp.status && emp.status.toLowerCase().includes('weather condition'));
     } else if (statusFilter === 'Special Leave') {
       matchesStatus = (emp.leave_type === 'Special Leave') || (emp.status && emp.status.toLowerCase().includes('special leave'));
     } else if (statusFilter !== 'All statuses') {
@@ -178,6 +181,18 @@ export default function AdminAllEmployeesView({ employees: initialEmployees = []
           title="Away due to scheduled Power Cut"
         >
           <span>⚡ Power Cut</span>
+        </span>
+      );
+    }
+
+    // 3b. Weather Condition
+    if (emp.leave_type === 'Weather Condition' || (emp.status && emp.status.includes('Weather Condition'))) {
+      return (
+        <span 
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border border-sky-300 bg-sky-50 text-sky-800 shadow-2xs"
+          title="Away due to Weather Condition (High Raining / Thunder)"
+        >
+          <span>🌧️ Weather Condition</span>
         </span>
       );
     }

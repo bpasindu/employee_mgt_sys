@@ -177,7 +177,8 @@ function getLeaveCancellationStatus(leave) {
 
   const isSpecial = leave.leave_type === 'Special Leave';
   const isPowerCut = leave.leave_type === 'Power Cut';
-  if (isSpecial || isPowerCut) {
+  const isWeatherCondition = leave.leave_type === 'Weather Condition';
+  if (isSpecial || isPowerCut || isWeatherCondition) {
     return { canCancel: true, isExpired: false, deadlineText: 'Anytime' };
   }
 
@@ -685,6 +686,8 @@ const dashboardService = {
         calculatedStatus = slDetails.short_leave_now ? 'Short Leave' : 'Working';
       } else if (al.leave_type === 'Power Cut') {
         calculatedStatus = 'Power Cut';
+      } else if (al.leave_type === 'Weather Condition') {
+        calculatedStatus = 'Weather Condition';
       } else {
         calculatedStatus = 'On Leave';
       }
@@ -698,6 +701,7 @@ const dashboardService = {
       const isSpecial = l.leave_type === 'Special Leave';
       const isShortLeave = l.leave_type === 'Short Leave';
       const isPowerCut = l.leave_type === 'Power Cut';
+      const isWeatherCondition = l.leave_type === 'Weather Condition';
       const sDate = l.start_date ? l.start_date.split('T')[0] : '';
       const eDate = l.end_date ? l.end_date.split('T')[0] : '';
 
@@ -709,7 +713,10 @@ const dashboardService = {
           ? '⏱️ Short Leave' 
           : isPowerCut 
           ? '⚡ Power Cut' 
+          : isWeatherCondition
+          ? '🌧️ Weather Condition'
           : l.leave_type,
+        raw_leave_type: l.leave_type,
         start_date: sDate,
         end_date: eDate,
         days_count: l.days_count,
@@ -762,6 +769,8 @@ const dashboardService = {
           displayStatus = sl.short_leave_now ? 'Short Leave' : 'Working';
         } else if (activeLeave.leave_type === 'Power Cut') {
           displayStatus = 'Power Cut';
+        } else if (activeLeave.leave_type === 'Weather Condition') {
+          displayStatus = 'Weather Condition';
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
@@ -1037,19 +1046,22 @@ const dashboardService = {
     if (updateErr) throw new Error(updateErr.message || 'Failed to cancel leave request');
 
     if (previousStatus === 'Approved') {
-      const { data: balances } = await supabase
-        .from('leave_balances')
-        .select('*')
-        .eq('user_id', lReq.user_id);
-
-      if (balances && balances.length > 0) {
-        const currentUsed = parseFloat(balances[0].used_days || 0);
-        const leaveDays = parseFloat(lReq.days_count || 1);
-        const newUsed = Math.max(0, currentUsed - leaveDays);
-        await supabase
+      const isQuotaExempt = lReq.leave_type === 'Power Cut' || lReq.leave_type === 'Weather Condition';
+      if (!isQuotaExempt) {
+        const { data: balances } = await supabase
           .from('leave_balances')
-          .update({ used_days: newUsed })
+          .select('*')
           .eq('user_id', lReq.user_id);
+
+        if (balances && balances.length > 0) {
+          const currentUsed = parseFloat(balances[0].used_days || 0);
+          const leaveDays = parseFloat(lReq.days_count || 1);
+          const newUsed = Math.max(0, currentUsed - leaveDays);
+          await supabase
+            .from('leave_balances')
+            .update({ used_days: newUsed })
+            .eq('user_id', lReq.user_id);
+        }
       }
 
       const { data: otherActiveLeaves } = await supabase
@@ -1169,6 +1181,7 @@ const adminService = {
     let studyLeaveCount = 0;
     let specialLeaveCount = 0;
     let powerCutCount = 0;
+    let weatherConditionCount = 0;
 
     const workingWorkforce = [];
     const todaysLeave = [];
@@ -1197,6 +1210,8 @@ const adminService = {
           displayStatus = sl.short_leave_now ? 'Short Leave' : 'Working';
         } else if (activeLeave.leave_type === 'Power Cut') {
           displayStatus = 'Power Cut';
+        } else if (activeLeave.leave_type === 'Weather Condition') {
+          displayStatus = 'Weather Condition';
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
@@ -1320,6 +1335,14 @@ const adminService = {
             leave_type: 'Power Cut',
             leave_reason: activeLeave.reason || 'Power Cut'
           });
+        } else if (leaveType === 'Weather Condition') {
+          weatherConditionCount++;
+          onLeaveCount++;
+          todaysLeave.push({
+            ...formattedEmp,
+            leave_type: 'Weather Condition',
+            leave_reason: activeLeave.reason || 'Weather Condition'
+          });
         } else {
           onLeaveCount++;
           todaysLeave.push({
@@ -1362,9 +1385,10 @@ const adminService = {
 
     const pendingFormatted = (pendingRequests || []).map(r => {
       const uBal = userBalancesMap[r.user_id] || { casualAvailable: 7, annualAvailable: 14 };
+      const isQuotaExempt = r.leave_type === 'Power Cut' || r.leave_type === 'Weather Condition';
       const isCasual = r.leave_type === 'Casual Leave' || (r.leave_type && r.leave_type.toLowerCase().includes('casual'));
-      const avail = isCasual ? uBal.casualAvailable : uBal.annualAvailable;
-      const isExceeded = avail <= 0;
+      const avail = isQuotaExempt ? 'Exempt' : (isCasual ? uBal.casualAvailable : uBal.annualAvailable);
+      const isExceeded = isQuotaExempt ? false : (typeof avail === 'number' && avail <= 0);
 
       return {
         id: r.id,
@@ -1472,6 +1496,7 @@ const adminService = {
         study_leave: studyLeaveCount,
         special_leave: specialLeaveCount,
         power_cut_leave: powerCutCount,
+        weather_condition_leave: weatherConditionCount,
         pending_requests: pendingFormatted.length,
         upcoming_leaves: upcomingFormatted.length
       },
@@ -1500,6 +1525,8 @@ const adminService = {
             displayStatus = sl.short_leave_now ? 'Short Leave' : 'Working';
           } else if (activeLeave.leave_type === 'Power Cut') {
             displayStatus = 'Power Cut';
+          } else if (activeLeave.leave_type === 'Weather Condition') {
+            displayStatus = 'Weather Condition';
           } else {
             displayStatus = `On Leave (${activeLeave.leave_type})`;
           }
@@ -1576,6 +1603,8 @@ const adminService = {
           displayStatus = sl.short_leave_now ? 'Short Leave' : 'Working';
         } else if (activeLeave.leave_type === 'Power Cut') {
           displayStatus = 'Power Cut';
+        } else if (activeLeave.leave_type === 'Weather Condition') {
+          displayStatus = 'Weather Condition';
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
@@ -1765,18 +1794,19 @@ const adminService = {
 
     if (lReq.status === 'Approved') throw new Error('Leave is already approved');
 
-    // Check if employee has reached or exceeded leave quota
-    const { data: userApprovedLeaves } = await supabase
-      .from('leave_requests')
-      .select('leave_type, days_count')
-      .eq('user_id', lReq.user_id)
-      .eq('status', 'Approved');
-
     const leaveType = lReq.leave_type || '';
     const isCasual = leaveType === 'Casual Leave' || leaveType.toLowerCase().includes('casual');
     const isPowerCut = leaveType === 'Power Cut';
+    const isWeatherCondition = leaveType === 'Weather Condition';
+    const isQuotaExempt = isPowerCut || isWeatherCondition;
 
-    if (!isPowerCut) {
+    if (!isQuotaExempt) {
+      // Check if employee has reached or exceeded leave quota
+      const { data: userApprovedLeaves } = await supabase
+        .from('leave_requests')
+        .select('leave_type, days_count')
+        .eq('user_id', lReq.user_id)
+        .eq('status', 'Approved');
       const casualTotal = 7;
       const annualTotal = 14;
       const annualKeywords = ['medical', 'half day', 'short leave', 'special', 'study'];
@@ -1816,19 +1846,21 @@ const adminService = {
 
     if (uErr) throw new Error(uErr.message);
 
-    // Deduct from leave balance if not already deducted
-    const { data: balances } = await supabase
-      .from('leave_balances')
-      .select('*')
-      .eq('user_id', lReq.user_id);
-
-    if (balances && balances.length > 0) {
-      const currentUsed = parseFloat(balances[0].used_days || 0);
-      const leaveDays = parseFloat(lReq.days_count || 1);
-      await supabase
+    // Deduct from leave balance if regular leave type (not quota exempt)
+    if (!isQuotaExempt) {
+      const { data: balances } = await supabase
         .from('leave_balances')
-        .update({ used_days: currentUsed + leaveDays })
+        .select('*')
         .eq('user_id', lReq.user_id);
+
+      if (balances && balances.length > 0) {
+        const currentUsed = parseFloat(balances[0].used_days || 0);
+        const leaveDays = parseFloat(lReq.days_count || 1);
+        await supabase
+          .from('leave_balances')
+          .update({ used_days: currentUsed + leaveDays })
+          .eq('user_id', lReq.user_id);
+      }
     }
 
     // If leave is active today, update user status
@@ -1845,6 +1877,10 @@ const adminService = {
         if (sl.short_leave_now) {
           await supabase.from('users').update({ status: 'On Leave' }).eq('id', lReq.user_id);
         }
+      } else if (lReq.leave_type === 'Power Cut') {
+        await supabase.from('users').update({ status: 'Power Cut' }).eq('id', lReq.user_id);
+      } else if (lReq.leave_type === 'Weather Condition') {
+        await supabase.from('users').update({ status: 'Weather Condition' }).eq('id', lReq.user_id);
       } else if (lReq.leave_type !== 'Study Leave') {
         await supabase.from('users').update({ status: 'On Leave' }).eq('id', lReq.user_id);
       }

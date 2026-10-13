@@ -50,7 +50,7 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Toast Notification */}
       {toastMsg && (
         <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-semibold animate-in fade-in duration-150 ${
@@ -91,22 +91,24 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 border-b border-slate-200/80 text-slate-500 uppercase tracking-wider font-semibold">
-              <tr>
-                <th className="px-6 py-3.5">Leave Type</th>
-                <th className="px-6 py-3.5">Duration</th>
-                <th className="px-6 py-3.5">Days</th>
-                <th className="px-6 py-3.5">Reason</th>
-                <th className="px-6 py-3.5">Status</th>
-                <th className="px-6 py-3.5 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[760px]">
+              <thead className="bg-slate-50 border-b border-slate-200/80 text-slate-500 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="px-6 py-3.5 whitespace-nowrap">Leave Type</th>
+                  <th className="px-6 py-3.5 whitespace-nowrap">Duration</th>
+                  <th className="px-6 py-3.5 whitespace-nowrap">Days</th>
+                  <th className="px-6 py-3.5 min-w-[160px]">Reason</th>
+                  <th className="px-6 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="px-6 py-3.5 text-center whitespace-nowrap min-w-[110px]">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
               {leaves.map((leave) => {
                 const isSpecial = leave.leave_type === 'Special Leave';
                 const isShortLeave = leave.leave_type === 'Short Leave';
                 const isPowerCut = leave.leave_type === 'Power Cut';
+                const isWeatherCondition = leave.leave_type === 'Weather Condition';
                 const sDate = leave.start_date ? leave.start_date.split('T')[0] : '';
                 const eDate = leave.end_date ? leave.end_date.split('T')[0] : '';
                 const durationText = isSpecial && leave.day_of_week
@@ -136,6 +138,10 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
                         <span className="bg-amber-50 text-amber-800 border border-amber-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shadow-2xs">
                           ⚡ Power Cut
                         </span>
+                      ) : isWeatherCondition ? (
+                        <span className="bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shadow-2xs">
+                          🌧️ Weather Condition
+                        </span>
                       ) : leave.leave_type}
                     </td>
                     <td className="px-6 py-4 text-slate-600">{durationText}</td>
@@ -156,15 +162,15 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
                         {leave.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center whitespace-nowrap">
                       {cancelStatus.canCancel ? (
                         <div className="inline-flex flex-col items-center">
                           <button
                             onClick={() => setCancelTarget(leave)}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                            className="bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 hover:text-rose-800 border border-rose-200 hover:border-rose-300 rounded-lg px-2.5 py-1 text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
                             title={`Cancel this leave request (Allowed ${cancelStatus.deadlineText})`}
                           >
-                            <Ban className="w-3 h-3" />
+                            <Ban className="w-3.5 h-3.5" />
                             <span>Cancel</span>
                           </button>
                         </div>
@@ -186,7 +192,8 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
             </tbody>
           </table>
         </div>
-      )}
+      </div>
+    )}
 
       {/* Confirmation Modal */}
       {cancelTarget && (
@@ -237,15 +244,35 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
                 </div>
               </div>
 
-              {cancelTarget.status === 'Approved' ? (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] p-3 rounded-xl font-medium leading-relaxed">
-                  💡 <strong>Leave Quota Refund:</strong> Since this leave was approved, <strong>{cancelTarget.days_count} day(s)</strong> will be automatically credited back to your available leave balance immediately upon cancellation.
-                </div>
-              ) : (
-                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-[11px] p-3 rounded-xl font-medium leading-relaxed">
-                  ℹ️ This pending leave request will be marked as Cancelled and removed from admin review.
-                </div>
-              )}
+              {(() => {
+                const isEmergencyQuotaExempt = cancelTarget.leave_type === 'Power Cut' || cancelTarget.leave_type === 'Weather Condition';
+                if (isEmergencyQuotaExempt) {
+                  return (
+                    <div className="bg-sky-50 border border-sky-200 text-sky-900 text-xs p-3.5 rounded-xl font-medium leading-relaxed flex items-start gap-2.5">
+                      <span className="text-lg shrink-0">{cancelTarget.leave_type === 'Weather Condition' ? '🌧️' : '⚡'}</span>
+                      <div>
+                        <strong className="text-sky-950 block">{cancelTarget.leave_type} (Quota-Exempt Emergency)</strong>
+                        Cancelling this leave will immediately restore your active status to <strong className="text-emerald-700">Working</strong>. No leave quota deduction or refund is affected.
+                      </div>
+                    </div>
+                  );
+                }
+                if (cancelTarget.status === 'Approved') {
+                  return (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3.5 rounded-xl font-medium leading-relaxed flex items-start gap-2.5">
+                      <span className="text-lg shrink-0">💡</span>
+                      <div>
+                        <strong className="text-emerald-950">Leave Quota Refund:</strong> Since this leave was approved, <strong>{cancelTarget.days_count} day(s)</strong> will be automatically credited back to your available leave balance immediately upon cancellation.
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3.5 rounded-xl font-medium leading-relaxed">
+                    ℹ️ This pending leave request will be marked as Cancelled and removed from admin review.
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-4 mt-4 border-t border-slate-100">
@@ -261,9 +288,13 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
                 type="button"
                 onClick={handleConfirmCancel}
                 disabled={isCancelling}
-                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isCancelling ? 'Cancelling...' : 'Yes, Cancel Leave'}
+                {isCancelling 
+                  ? 'Processing...' 
+                  : (cancelTarget.leave_type === 'Power Cut' || cancelTarget.leave_type === 'Weather Condition'
+                      ? 'Resume Work & Cancel Leave'
+                      : 'Yes, Cancel Leave')}
               </button>
             </div>
           </div>

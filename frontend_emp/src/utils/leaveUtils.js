@@ -33,7 +33,8 @@ export function getLeaveCancellationStatus(leave) {
 
   const isSpecial = leave.leave_type === 'Special Leave';
   const isPowerCut = leave.leave_type === 'Power Cut';
-  if (isSpecial || isPowerCut) {
+  const isWeatherCondition = leave.leave_type === 'Weather Condition';
+  if (isSpecial || isPowerCut || isWeatherCondition) {
     return { canCancel: true, isExpired: false, deadlineText: 'Anytime' };
   }
 

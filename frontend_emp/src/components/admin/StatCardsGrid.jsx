@@ -16,7 +16,8 @@ import {
   Timer,
   Zap,
   Repeat,
-  Layers
+  Layers,
+  CloudRain
 } from 'lucide-react';
 
 export default function StatCardsGrid({ 
@@ -93,6 +94,7 @@ export default function StatCardsGrid({
   const medicalList = todaysLeave.filter(e => e.leave_type === 'Medical Leave');
   const shortLeaveList = todaysLeave.filter(e => e.leave_type === 'Short Leave');
   const powerCutList = todaysLeave.filter(e => e.leave_type === 'Power Cut');
+  const weatherList = todaysLeave.filter(e => e.leave_type === 'Weather Condition');
 
   const leaveTypeBoxes = [
     {
@@ -178,6 +180,18 @@ export default function StatCardsGrid({
       iconBg: 'bg-yellow-100/80 text-yellow-700',
       badgeClass: 'bg-yellow-100 text-yellow-800',
       desc: 'Emergency outage'
+    },
+    {
+      id: 'weather_condition',
+      title: 'Weather Condition',
+      count: stats?.weather_condition_leave ?? weatherList.length,
+      icon: CloudRain,
+      emoji: '🌧️',
+      color: 'sky',
+      bgClass: 'bg-sky-50/70 hover:bg-sky-50 border-sky-200/70 hover:border-sky-300 text-sky-800',
+      iconBg: 'bg-sky-100/80 text-sky-700',
+      badgeClass: 'bg-sky-100 text-sky-800',
+      desc: 'Rain & thunder'
     }
   ];
 
@@ -374,6 +388,23 @@ export default function StatCardsGrid({
           totalCount: powerCutList.length,
           items: list,
           type: 'power_cut'
+        };
+      }
+      case 'weather_condition': {
+        const list = weatherList.filter(e => 
+          (e.name && e.name.toLowerCase().includes(term)) ||
+          (e.department && e.department.toLowerCase().includes(term)) ||
+          (e.reason && e.reason.toLowerCase().includes(term))
+        );
+        return {
+          title: 'Weather Condition Emergency Leave',
+          subtitle: 'Staff on leave due to high raining or thunder conditions',
+          icon: CloudRain,
+          iconBg: 'bg-sky-50 text-sky-600 border-sky-200',
+          badgeColor: 'bg-sky-100 text-sky-800',
+          totalCount: weatherList.length,
+          items: list,
+          type: 'weather_condition'
         };
       }
       case 'pending': {
@@ -690,6 +721,12 @@ export default function StatCardsGrid({
                         {modalConfig.type === 'power_cut' && (
                           <span className="bg-yellow-50 text-yellow-800 border border-yellow-300 text-[11px] font-bold px-2.5 py-0.5 rounded-md shadow-2xs">
                             ⚡ Power Cut Leave
+                          </span>
+                        )}
+
+                        {modalConfig.type === 'weather_condition' && (
+                          <span className="bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold px-2.5 py-0.5 rounded-md shadow-2xs">
+                            🌧️ Weather Condition Leave
                           </span>
                         )}
 

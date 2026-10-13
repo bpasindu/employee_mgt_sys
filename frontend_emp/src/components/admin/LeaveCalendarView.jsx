@@ -104,6 +104,8 @@ export default function LeaveCalendarView() {
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'Power Cut':
         return 'bg-amber-100 text-amber-900 border-amber-300';
+      case 'Weather Condition':
+        return 'bg-sky-100 text-sky-900 border-sky-300';
       default:
         return 'bg-slate-50 text-slate-700 border-slate-200';
     }
@@ -118,6 +120,7 @@ export default function LeaveCalendarView() {
       case 'Medical Leave': return 'bg-rose-500';
       case 'Annual Leave': return 'bg-emerald-500';
       case 'Power Cut': return 'bg-amber-500';
+      case 'Weather Condition': return 'bg-sky-500';
       default: return 'bg-slate-500';
     }
   };
