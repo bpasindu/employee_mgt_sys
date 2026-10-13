@@ -733,19 +733,30 @@ export default function StatCardsGrid({
                           </div>
                         )}
 
-                        {modalConfig.type === 'upcoming' && (
-                          <div className="flex flex-col sm:items-end gap-1">
-                            <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold px-2.5 py-0.5 rounded-md shadow-2xs">
-                              {item.leave_type}
-                            </span>
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                              <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 text-[10px] font-extrabold">
-                                ✓ Accepted
+                        {modalConfig.type === 'upcoming' && (() => {
+                          const cleanDate = (item.from_date || '').split('T')[0];
+                          const cleanToDate = (item.to_date || '').split('T')[0];
+                          const dateStr = cleanDate
+                            ? (cleanDate === cleanToDate || !cleanToDate ? cleanDate : `${cleanDate} to ${cleanToDate}`)
+                            : '';
+                          let durationText = item.duration || dateStr;
+                          if (cleanDate && item.duration && !item.duration.includes(cleanDate)) {
+                            durationText = `${item.duration} (${dateStr})`;
+                          }
+                          return (
+                            <div className="flex flex-col sm:items-end gap-1">
+                              <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold px-2.5 py-0.5 rounded-md shadow-2xs">
+                                {item.leave_type}
                               </span>
-                              <span>📅 {item.duration || `${item.from_date} to ${item.to_date}`}</span>
+                              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+                                <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 text-[10px] font-extrabold">
+                                  ✓ Accepted
+                                </span>
+                                <span>📅 {durationText}</span>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     </div>
                   );
