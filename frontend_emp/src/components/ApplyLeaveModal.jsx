@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CalendarPlus, Plus, Trash2, Zap, Laptop, Smartphone, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
+import { X, CalendarPlus, Plus, Trash2, Zap, Laptop, Smartphone, Clock, AlertTriangle, ArrowRight, CloudRain, CloudLightning } from 'lucide-react';
 
 const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -18,6 +18,10 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   // Power Cut Fields
   const [laptopBattery, setLaptopBattery] = useState('');
   const [phoneBattery, setPhoneBattery] = useState('');
+
+  // Weather Condition Fields
+  const [highRaining, setHighRaining] = useState(false);
+  const [highThundering, setHighThundering] = useState(false);
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -39,6 +43,8 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     setEndTime('11:30');
     setLaptopBattery('');
     setPhoneBattery('');
+    setHighRaining(false);
+    setHighThundering(false);
     setStartDate('');
     setEndDate('');
     setDaysCount(1);
@@ -51,6 +57,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   const isShortLeave = leaveType === 'Short Leave';
   const isSpecialLeave = leaveType === 'Special Leave';
   const isPowerCut = leaveType === 'Power Cut';
+  const isWeatherCondition = leaveType === 'Weather Condition';
 
   const calculateDays = (sDate, eDate) => {
     if (!sDate || !eDate) return 1;
@@ -76,7 +83,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   const handleStartDateChange = (val) => {
     setStartDate(val);
     setErrorMsg('');
-    if (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut) {
+    if (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) {
       setEndDate(val);
       if (isShortLeave) {
         setDaysCount(shortLeaveHours > 0 ? Math.min(0.5, +(shortLeaveHours / 9).toFixed(3)) : 0.25);
@@ -108,9 +115,15 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       const hrs = calculateShortLeaveDuration(startTime, endTime);
       setDaysCount(hrs > 0 ? Math.min(0.5, +(hrs / 9).toFixed(3)) : 0.25);
       if (startDate) setEndDate(startDate);
-    } else if (newType === 'Power Cut') {
+    } else if (newType === 'Power Cut' || newType === 'Weather Condition') {
       setDaysCount(1);
-      if (startDate) setEndDate(startDate);
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (!startDate) {
+        setStartDate(todayStr);
+        setEndDate(todayStr);
+      } else {
+        setEndDate(startDate);
+      }
     } else {
       if (startDate && endDate) {
         setDaysCount(calculateDays(startDate, endDate));
@@ -191,14 +204,21 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       }
     }
 
+    if (isWeatherCondition) {
+      if (!highRaining && !highThundering) {
+        setErrorMsg('Please select at least one condition: High Raining or High Thundering.');
+        return;
+      }
+    }
+
     if (isSpecialLeave && specialEntries.length === 0) {
       setErrorMsg('Please add at least one day for Special Leave.');
       return;
     }
 
-    // Check Leave Quota Balance (Only Power Cut does not deduct from regular leave quota)
+    // Check Leave Quota Balance (Power Cut & Weather Condition do not deduct from regular leave quota)
     const isCasualType = leaveType === 'Casual Leave';
-    const isQuotaExempt = leaveType === 'Power Cut';
+    const isQuotaExempt = leaveType === 'Power Cut' || leaveType === 'Weather Condition';
     
     if (!isQuotaExempt) {
       const currentQuota = isCasualType 
@@ -211,7 +231,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       }
     }
 
-    const finalEndDate = (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut) ? startDate : endDate;
+    const finalEndDate = (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) ? startDate : endDate;
     if (!finalEndDate) return;
 
     setIsSubmitting(true);
@@ -238,6 +258,12 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
         finalReason = `[Special Leave - ${entryDesc}] ${reason}`.trim();
       } else if (isPowerCut) {
         finalReason = `[Power Cut - Laptop: ${laptopBattery}%, Phone: ${phoneBattery}%] ${reason}`.trim();
+      } else if (isWeatherCondition) {
+        const conditions = [];
+        if (highRaining) conditions.push('High Raining');
+        if (highThundering) conditions.push('High Thundering');
+        const condStr = conditions.join(', ');
+        finalReason = reason ? `[Weather Condition: ${condStr}] ${reason}`.trim() : `[Weather Condition: ${condStr}]`;
       }
 
       await onSubmitLeave({
@@ -248,7 +274,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
         day_of_week: dayOfWeekStr,
         start_time: isShortLeave ? (startTime + ':00') : isHalfDay ? (halfDaySession === 'Morning' ? '08:30:00' : '12:30:00') : null,
         end_time: isShortLeave ? (endTime + ':00') : isHalfDay ? (halfDaySession === 'Morning' ? '12:30:00' : '17:30:00') : null,
-        special_session: isHalfDay ? halfDaySession : isShortLeave ? `${shortLeaveHours.toFixed(1)} hrs` : isPowerCut ? 'Power Cut' : null,
+        special_session: isHalfDay ? halfDaySession : isShortLeave ? `${shortLeaveHours.toFixed(1)} hrs` : isPowerCut ? 'Power Cut' : isWeatherCondition ? 'Weather Condition' : null,
         is_recurring: isSpecialLeave ? 1 : 0,
         reason: finalReason
       });
@@ -273,7 +299,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
 `*New Leave Request Submission*
 ----------------------------------
 *Employee Name:* ${empName}${empDept}
-*Leave Type:* ${isShortLeave ? '⏱️ Short Leave' : isPowerCut ? '⚡ Power Cut' : leaveType}
+*Leave Type:* ${isShortLeave ? '⏱️ Short Leave' : isPowerCut ? '⚡ Power Cut' : isWeatherCondition ? '🌧️ Weather Condition' : leaveType}
 *Duration / Date:* ${leaveDurationStr}
 ${isPowerCut ? `*Laptop Battery:* ${laptopBattery}%\n*Phone Battery:* ${phoneBattery}%\n` : ''}*Reason / Details:* ${finalReason || 'None'}
 ----------------------------------
@@ -377,6 +403,7 @@ Submitted via P W Holdings Employee Management System`;
               <option value="Half Day">Half Day</option>
               <option value="Short Leave">⏱️ Short Leave (Max 3 hrs)</option>
               <option value="Power Cut">⚡ Power Cut</option>
+              <option value="Weather Condition">🌧️ Weather Condition</option>
               <option value="Study Leave">Study Leave</option>
               <option value="Special Leave">Special Leave (Weekly Recurring)</option>
             </select>
@@ -394,6 +421,10 @@ Submitted via P W Holdings Employee Management System`;
               ) : leaveType === 'Power Cut' ? (
                 <span className="text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md text-[11px] font-semibold inline-block">
                   ⚡ Power Cut (Emergency Leave - Does not deduct from leave quota)
+                </span>
+              ) : leaveType === 'Weather Condition' ? (
+                <span className="text-sky-800 bg-sky-50 border border-sky-200/80 px-2 py-0.5 rounded-md text-[11px] font-semibold inline-block">
+                  🌧️ Weather Condition (Emergency Leave - Does not deduct from leave quota)
                 </span>
               ) : (
                 <>
@@ -671,8 +702,73 @@ Submitted via P W Holdings Employee Management System`;
             </div>
           )}
 
+          {/* Weather Condition Section: High Raining & High Thundering Tick Buttons */}
+          {isWeatherCondition && (
+            <div className="bg-sky-50/70 p-4 rounded-xl border border-sky-200/80 space-y-3 animate-in fade-in duration-150">
+              <div className="flex items-center gap-2 text-sky-950 font-bold text-xs">
+                <CloudRain className="w-4 h-4 text-sky-600" />
+                <span>Severe Weather Condition <span className="text-rose-500">*</span></span>
+              </div>
+              <p className="text-[11px] text-sky-800 font-medium">
+                Select the severe weather condition(s) affecting your location:
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* High Raining Tick Button */}
+                <label
+                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                    highRaining
+                      ? 'bg-sky-100/90 border-sky-600 text-sky-950 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={highRaining}
+                    onChange={(e) => {
+                      setHighRaining(e.target.checked);
+                      setErrorMsg('');
+                    }}
+                    className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer accent-sky-600"
+                  />
+                  <div className="min-w-0">
+                    <span className="text-xs sm:text-sm font-bold flex items-center gap-1.5 leading-tight">
+                      <span>🌧️</span>
+                      <span>High Raining</span>
+                    </span>
+                  </div>
+                </label>
+
+                {/* High Thundering Tick Button */}
+                <label
+                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                    highThundering
+                      ? 'bg-amber-100/90 border-amber-600 text-amber-950 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-amber-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={highThundering}
+                    onChange={(e) => {
+                      setHighThundering(e.target.checked);
+                      setErrorMsg('');
+                    }}
+                    className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                  />
+                  <div className="min-w-0">
+                    <span className="text-xs sm:text-sm font-bold flex items-center gap-1.5 leading-tight">
+                      <span>⚡</span>
+                      <span>High Thundering</span>
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Date Fields */}
-          {(isHalfDay || isShortLeave || isSpecialLeave || isPowerCut) ? (
+          {(isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) ? (
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 {isSpecialLeave ? 'Effective Start Date' : 'Date'}
@@ -725,24 +821,26 @@ Submitted via P W Holdings Employee Management System`;
             </>
           )}
 
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-xs font-semibold text-slate-700">
-                Reason (Optional)
-              </label>
-              <span className="text-[10px] text-slate-400 font-medium">
-                {reason.length}/500
-              </span>
+          {!isWeatherCondition && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Reason (Optional)
+                </label>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  {reason.length}/500
+                </span>
+              </div>
+              <textarea
+                rows={3}
+                maxLength={500}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={isPowerCut ? "Details about power outage, tasks affected, etc. (up to 500 characters)" : "Reason for your leave request (up to 500 characters)..."}
+                className="w-full border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none font-medium"
+              />
             </div>
-            <textarea
-              rows={3}
-              maxLength={500}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={isPowerCut ? "Details about power outage, tasks affected, etc. (up to 500 characters)" : "Reason for your leave request (up to 500 characters)..."}
-              className="w-full border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none font-medium"
-            />
-          </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">

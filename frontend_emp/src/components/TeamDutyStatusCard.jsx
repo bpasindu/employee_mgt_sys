@@ -153,8 +153,14 @@ export default function TeamDutyStatusCard({ workingWorkforce = [], todaysLeave 
                     )
                   ) : (
                     <div className="flex flex-col items-start sm:items-end gap-0.5">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800 shadow-2xs">
-                        <span>🏖️ {emp.leave_type || 'On Leave'}</span>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold shadow-2xs border ${
+                        emp.leave_type === 'Weather Condition'
+                          ? 'bg-sky-50 text-sky-800 border-sky-300'
+                          : emp.leave_type === 'Power Cut'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300'
+                          : 'bg-purple-50 text-purple-800 border-purple-200'
+                      }`}>
+                        <span>{emp.leave_type === 'Weather Condition' ? '🌧️ Weather Condition' : emp.leave_type === 'Power Cut' ? '⚡ Power Cut' : `🏖️ ${emp.leave_type || 'On Leave'}`}</span>
                       </span>
                       {emp.duration && (
                         <span className="text-[10px] text-slate-400 font-medium">

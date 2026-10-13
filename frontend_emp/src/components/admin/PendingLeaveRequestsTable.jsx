@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowUpRight, Eye, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowUpRight, Eye, CheckCircle2, XCircle, Check, X, Loader2, Lock } from 'lucide-react';
 
 const AUTHORIZED_SENIOR_ADMINS = [
   'channet@pwholdings.lk',
@@ -9,31 +9,43 @@ const AUTHORIZED_SENIOR_ADMINS = [
 
 export default function PendingLeaveRequestsTable({ requests = [], currentUser, onApprove, onReject, onViewAll }) {
   const [actionSuccess, setActionSuccess] = useState(null);
+  const [loadingState, setLoadingState] = useState({ id: null, action: null });
 
   const userEmail = (currentUser?.email || '').trim().toLowerCase();
   const isAuthorizedSeniorAdmin = AUTHORIZED_SENIOR_ADMINS.includes(userEmail);
 
   const handleApproveClick = async (req) => {
-    const isExceeded = req.is_exceeded_balance || (req.user_available_balance !== undefined && req.user_available_balance <= 0);
+    const isQuotaExempt = req.leave_type === 'Power Cut' || req.leave_type === 'Weather Condition';
+    const isExceeded = !isQuotaExempt && (req.is_exceeded_balance || (req.user_available_balance !== undefined && req.user_available_balance <= 0));
     
     if (isExceeded && !isAuthorizedSeniorAdmin) {
       alert(`⚠️ Restricted: Over-quota leave requests can only be approved by authorized Senior Admins:\n• channet@pwholdings.lk\n• nishadi@pwholdings.lk\n• hashan@pwholdings.lk`);
       return;
     }
 
+    setLoadingState({ id: req.id, action: 'approve' });
     try {
       await onApprove(req.id);
-      setActionSuccess(`Approved leave request for ${req.employee_name}`);
+      setActionSuccess(`✅ Approved leave request for ${req.employee_name}`);
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
       console.error('Approve failed:', err);
+    } finally {
+      setLoadingState({ id: null, action: null });
     }
   };
 
   const handleRejectClick = async (id, name) => {
-    await onReject(id);
-    setActionSuccess(`Rejected leave request for ${name}`);
-    setTimeout(() => setActionSuccess(null), 3000);
+    setLoadingState({ id, action: 'reject' });
+    try {
+      await onReject(id);
+      setActionSuccess(`❌ Rejected leave request for ${name}`);
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err) {
+      console.error('Reject failed:', err);
+    } finally {
+      setLoadingState({ id: null, action: null });
+    }
   };
 
   return (
@@ -87,7 +99,8 @@ export default function PendingLeaveRequestsTable({ requests = [], currentUser, 
               </tr>
             ) : (
               requests.map((req) => {
-                const isExceeded = req.is_exceeded_balance || (req.user_available_balance !== undefined && req.user_available_balance <= 0);
+                const isQuotaExempt = req.leave_type === 'Power Cut' || req.leave_type === 'Weather Condition';
+                const isExceeded = !isQuotaExempt && (req.is_exceeded_balance || (req.user_available_balance !== undefined && req.user_available_balance <= 0));
 
                 return (
                   <tr 
@@ -120,6 +133,13 @@ export default function PendingLeaveRequestsTable({ requests = [], currentUser, 
                           </span>
                         </div>
                       )}
+                      {isQuotaExempt && (
+                        <div className="mt-1">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                            🛡️ Quota-Exempt Emergency
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-slate-700 font-semibold">
                       {req.leave_type === 'Special Leave' ? (
@@ -133,6 +153,10 @@ export default function PendingLeaveRequestsTable({ requests = [], currentUser, 
                       ) : req.leave_type === 'Power Cut' ? (
                         <span className="bg-amber-50 text-amber-800 border border-amber-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shadow-2xs">
                           ⚡ Power Cut
+                        </span>
+                      ) : req.leave_type === 'Weather Condition' ? (
+                        <span className="bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shadow-2xs">
+                          🌧️ Weather Condition
                         </span>
                       ) : req.leave_type}
                     </td>
@@ -150,21 +174,49 @@ export default function PendingLeaveRequestsTable({ requests = [], currentUser, 
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleApproveClick(req)}
+                          disabled={loadingState.id === req.id || (isExceeded && !isAuthorizedSeniorAdmin)}
                           className={`${
                             isExceeded && !isAuthorizedSeniorAdmin
-                              ? 'bg-slate-300 text-slate-600 cursor-not-allowed border border-slate-400/50'
-                              : 'bg-[#07162c] hover:bg-[#0d274c] text-white cursor-pointer'
-                          } text-xs font-bold px-3 py-1 rounded-lg transition-all shadow-2xs`}
-                          title={isExceeded && !isAuthorizedSeniorAdmin ? "Over-quota leave requires approval from Channet, Nishadi, or Hashan" : "Approve leave"}
+                              ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300'
+                              : 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white cursor-pointer shadow-xs hover:shadow'
+                          } text-xs font-bold px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5 disabled:opacity-60`}
+                          title={isExceeded && !isAuthorizedSeniorAdmin ? "Over-quota leave requires approval from Channet, Nishadi, or Hashan" : "Approve leave request"}
                         >
-                          {isExceeded && !isAuthorizedSeniorAdmin ? '🔒 Restricted' : 'Approve'}
+                          {loadingState.id === req.id && loadingState.action === 'approve' ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Approving...</span>
+                            </>
+                          ) : isExceeded && !isAuthorizedSeniorAdmin ? (
+                            <>
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>Restricted</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>Approve</span>
+                            </>
+                          )}
                         </button>
 
                         <button
                           onClick={() => handleRejectClick(req.id, req.employee_name)}
-                          className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-1 rounded-lg transition-all cursor-pointer"
+                          disabled={loadingState.id === req.id}
+                          className="bg-white hover:bg-rose-50 active:scale-95 text-rose-700 hover:text-rose-800 border border-slate-200 hover:border-rose-300 text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1.5 disabled:opacity-50"
+                          title="Reject leave request"
                         >
-                          Reject
+                          {loadingState.id === req.id && loadingState.action === 'reject' ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                              <span>Rejecting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>Reject</span>
+                            </>
+                          )}
                         </button>
 
                         <button

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertTriangle, X } from 'lucide-react';
 import API from './api';
 
 // Authentication Landing Page
@@ -64,6 +65,8 @@ export default function App() {
   });
   const [recentLeaveRequests, setRecentLeaveRequests] = useState([]);
   const [isApplyLeaveOpen, setIsApplyLeaveOpen] = useState(false);
+  const [cancelTargetModal, setCancelTargetModal] = useState(null);
+  const [isCancellingLeave, setIsCancellingLeave] = useState(false);
 
   // Admin Dashboard State
   const [adminUser, setAdminUser] = useState({
@@ -188,24 +191,39 @@ export default function App() {
     setCurrentView('login');
   };
 
-  // Admin Actions
+  // Admin Actions (Optimistic UI: updates within <1 second)
   const handleApproveLeave = async (id) => {
+    const prevPending = pendingLeaveRequests;
+    // Optimistic removal: instantly disappears from table and updates badge
+    setPendingLeaveRequests(prev => prev.filter(r => r.id !== id));
+    setAdminStats(prev => prev ? { ...prev, pending_requests: Math.max(0, (prev.pending_requests || 1) - 1) } : prev);
+
     try {
       await API.post('/admin/leave/approve', { id, admin_email: currentUser?.email });
-      await fetchAdminSummary();
+      // Non-blocking background sync
+      fetchAdminSummary().catch(console.error);
     } catch (err) {
       console.error('Failed to approve leave:', err);
+      // Rollback on failure
+      setPendingLeaveRequests(prevPending);
+      setAdminStats(prev => prev ? { ...prev, pending_requests: prevPending.length } : prev);
       const msg = err.response?.data?.error || err.message || 'Failed to approve leave request';
       alert(`⚠️ Approval Restricted:\n${msg}`);
     }
   };
 
   const handleRejectLeave = async (id) => {
+    const prevPending = pendingLeaveRequests;
+    setPendingLeaveRequests(prev => prev.filter(r => r.id !== id));
+    setAdminStats(prev => prev ? { ...prev, pending_requests: Math.max(0, (prev.pending_requests || 1) - 1) } : prev);
+
     try {
       await API.post('/admin/leave/reject', { id });
-      await fetchAdminSummary();
+      fetchAdminSummary().catch(console.error);
     } catch (err) {
       console.error('Failed to reject leave:', err);
+      setPendingLeaveRequests(prevPending);
+      setAdminStats(prev => prev ? { ...prev, pending_requests: prevPending.length } : prev);
     }
   };
 
@@ -228,6 +246,27 @@ export default function App() {
     } catch (err) {
       console.error('Failed to submit leave:', err);
       throw err;
+    }
+  };
+
+  const handleCancelLeave = (leave) => {
+    if (!leave?.id || !currentUser?.id) return;
+    setCancelTargetModal(leave);
+  };
+
+  const handleConfirmCancelLeave = async () => {
+    if (!cancelTargetModal?.id || !currentUser?.id) return;
+    setIsCancellingLeave(true);
+    try {
+      await API.post('/leave/cancel', { id: cancelTargetModal.id, user_id: currentUser.id });
+      setCancelTargetModal(null);
+      await fetchEmployeeSummary(currentUser.id);
+    } catch (err) {
+      console.error('Failed to cancel leave:', err);
+      const msg = err.response?.data?.error || err.message || 'Failed to cancel leave request';
+      alert(`⚠️ Could not cancel leave:\n${msg}`);
+    } finally {
+      setIsCancellingLeave(false);
     }
   };
 
@@ -444,25 +483,78 @@ export default function App() {
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {activeTab === 'dashboard' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              <div className="lg:col-span-8 space-y-6">
-                <GreetingBanner user={user} onUpdateStatus={handleUpdateStatus} />
-                <DailyWorkCard initialWork={todayWork} onSaveWork={handleSaveWork} />
-                <TeamDutyStatusCard 
-                  workingWorkforce={workingWorkforce}
-                  todaysLeave={todaysLeave}
-                />
+          {activeTab === 'dashboard' && (() => {
+            const todayDateStr = new Date().toISOString().split('T')[0];
+            const activeEmergencyLeave = recentLeaveRequests?.find(r => 
+              (r.leave_type === 'Weather Condition' || r.leave_type === 'Power Cut') &&
+              (r.status === 'Approved' || r.status === 'Pending') &&
+              r.start_date && r.start_date.split('T')[0] <= todayDateStr &&
+              r.end_date && r.end_date.split('T')[0] >= todayDateStr
+            );
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <div className="lg:col-span-8 space-y-6">
+                  <GreetingBanner user={user} onUpdateStatus={handleUpdateStatus} />
+
+                  {/* Active Emergency Leave Quick-Resume Banner */}
+                  {activeEmergencyLeave && (
+                    <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs transition-all ${
+                      activeEmergencyLeave.leave_type === 'Weather Condition'
+                        ? 'bg-gradient-to-r from-sky-50 to-blue-50/70 border-sky-200 text-sky-950'
+                        : 'bg-gradient-to-r from-amber-50 to-yellow-50/70 border-amber-200 text-amber-950'
+                    }`}>
+                      <div className="flex items-center gap-3.5">
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border text-2xl shadow-2xs ${
+                          activeEmergencyLeave.leave_type === 'Weather Condition'
+                            ? 'bg-sky-100 border-sky-300'
+                            : 'bg-amber-100 border-amber-300'
+                        }`}>
+                          {activeEmergencyLeave.leave_type === 'Weather Condition' ? '🌧️' : '⚡'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/80 border border-slate-200/60 text-slate-700">
+                              {activeEmergencyLeave.leave_type} ({activeEmergencyLeave.status})
+                            </span>
+                          </div>
+                          <p className="text-xs sm:text-sm font-bold text-slate-900 mt-1">
+                            {activeEmergencyLeave.leave_type === 'Weather Condition'
+                              ? 'Weather cleared? You can stop this leave anytime and resume working continuously.'
+                              : 'Power restored? You can stop this leave anytime and resume working continuously.'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelLeave(activeEmergencyLeave)}
+                        className="bg-white hover:bg-slate-50 active:scale-95 text-slate-900 font-extrabold text-xs px-4 py-2.5 rounded-xl border border-slate-300 shadow-xs hover:shadow transition-all shrink-0 cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                        <span>Resume Work & Cancel Leave</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <DailyWorkCard initialWork={todayWork} onSaveWork={handleSaveWork} />
+                  <TeamDutyStatusCard 
+                    workingWorkforce={workingWorkforce}
+                    todaysLeave={todaysLeave}
+                  />
+                </div>
+                <div className="lg:col-span-4 space-y-6">
+                  <LeaveBalanceCard 
+                    leaveBalance={leaveBalance} 
+                    onOpenApplyLeave={() => setIsApplyLeaveOpen(true)} 
+                  />
+                  <RecentLeaveRequestsCard 
+                    requests={recentLeaveRequests} 
+                    onCancelLeave={handleCancelLeave} 
+                  />
+                </div>
               </div>
-              <div className="lg:col-span-4 space-y-6">
-                <LeaveBalanceCard 
-                  leaveBalance={leaveBalance} 
-                  onOpenApplyLeave={() => setIsApplyLeaveOpen(true)} 
-                />
-                <RecentLeaveRequestsCard requests={recentLeaveRequests} />
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === 'work-history' && <WorkHistoryView userId={currentUser?.id} />}
 
@@ -509,6 +601,112 @@ export default function App() {
         user={user}
         leaveBalance={leaveBalance}
       />
+
+      {/* Cancel Leave Confirmation Modal (Employee Dashboard) */}
+      {cancelTargetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900">Cancel Leave Request</h3>
+              </div>
+              <button
+                onClick={() => setCancelTargetModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to cancel this leave application?
+              </p>
+
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Leave Type:</span>
+                  <span className="font-bold text-slate-800">{cancelTargetModal.leave_type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Date / Period:</span>
+                  <span className="font-semibold text-slate-800">
+                    {cancelTargetModal.start_date === cancelTargetModal.end_date 
+                      ? cancelTargetModal.start_date 
+                      : `${cancelTargetModal.start_date} → ${cancelTargetModal.end_date}`}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Days / Duration:</span>
+                  <span className="font-semibold text-slate-800">{cancelTargetModal.days_count} day(s)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Current Status:</span>
+                  <span className={`font-bold ${cancelTargetModal.status === 'Approved' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {cancelTargetModal.status}
+                  </span>
+                </div>
+              </div>
+
+              {(() => {
+                const isEmergencyQuotaExempt = cancelTargetModal.leave_type === 'Power Cut' || cancelTargetModal.leave_type === 'Weather Condition';
+                if (isEmergencyQuotaExempt) {
+                  return (
+                    <div className="bg-sky-50 border border-sky-200 text-sky-900 text-xs p-3.5 rounded-xl font-medium leading-relaxed flex items-start gap-2.5">
+                      <span className="text-lg shrink-0">{cancelTargetModal.leave_type === 'Weather Condition' ? '🌧️' : '⚡'}</span>
+                      <div>
+                        <strong className="text-sky-950 block">{cancelTargetModal.leave_type} (Quota-Exempt Emergency)</strong>
+                        Cancelling this leave will immediately restore your active status to <strong className="text-emerald-700">Working</strong>. No leave quota deduction or refund is affected.
+                      </div>
+                    </div>
+                  );
+                }
+                if (cancelTargetModal.status === 'Approved') {
+                  return (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3.5 rounded-xl font-medium leading-relaxed flex items-start gap-2.5">
+                      <span className="text-lg shrink-0">💡</span>
+                      <div>
+                        <strong className="text-emerald-950">Leave Quota Refund:</strong> Since this leave was approved, <strong>{cancelTargetModal.days_count} day(s)</strong> will be automatically credited back to your available leave balance immediately upon cancellation.
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3.5 rounded-xl font-medium leading-relaxed">
+                    ℹ️ This pending leave request will be marked as Cancelled and removed from admin review.
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-4 mt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setCancelTargetModal(null)}
+                disabled={isCancellingLeave}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Keep Leave
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancelLeave}
+                disabled={isCancellingLeave}
+                className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isCancellingLeave 
+                  ? 'Processing...' 
+                  : (cancelTargetModal.leave_type === 'Power Cut' || cancelTargetModal.leave_type === 'Weather Condition'
+                      ? 'Resume Work & Cancel Leave'
+                      : 'Yes, Cancel Leave')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

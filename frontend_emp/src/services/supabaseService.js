@@ -169,7 +169,8 @@ export function getLeaveCancellationStatus(leave) {
   // Special Leave and Power Cut can be cancelled anytime (no mandatory deadline)
   const isSpecial = leave.leave_type === 'Special Leave';
   const isPowerCut = leave.leave_type === 'Power Cut';
-  if (isSpecial || isPowerCut) {
+  const isWeatherCondition = leave.leave_type === 'Weather Condition';
+  if (isSpecial || isPowerCut || isWeatherCondition) {
     return { canCancel: true, isExpired: false, deadlineText: 'Anytime' };
   }
 
@@ -517,6 +518,10 @@ export const dashboardService = {
       } else if (activeLeave.leave_type === 'Short Leave') {
         slDetails = getShortLeaveDetails(activeLeave);
         calculatedStatus = slDetails.short_leave_now ? 'Short Leave' : 'Working';
+      } else if (activeLeave.leave_type === 'Power Cut') {
+        calculatedStatus = 'Power Cut';
+      } else if (activeLeave.leave_type === 'Weather Condition') {
+        calculatedStatus = 'Weather Condition';
       } else {
         calculatedStatus = 'On Leave';
       }
@@ -704,19 +709,22 @@ export const dashboardService = {
 
     // 3. If the leave was already 'Approved', restore the quota/balance and revert user working status
     if (previousStatus === 'Approved') {
-      const { data: balances } = await supabase
-        .from('leave_balances')
-        .select('*')
-        .eq('user_id', lReq.user_id);
-
-      if (balances && balances.length > 0) {
-        const currentUsed = parseFloat(balances[0].used_days || 0);
-        const leaveDays = parseFloat(lReq.days_count || 1);
-        const newUsed = Math.max(0, currentUsed - leaveDays);
-        await supabase
+      const isQuotaExempt = lReq.leave_type === 'Power Cut' || lReq.leave_type === 'Weather Condition';
+      if (!isQuotaExempt) {
+        const { data: balances } = await supabase
           .from('leave_balances')
-          .update({ used_days: newUsed })
+          .select('*')
           .eq('user_id', lReq.user_id);
+
+        if (balances && balances.length > 0) {
+          const currentUsed = parseFloat(balances[0].used_days || 0);
+          const leaveDays = parseFloat(lReq.days_count || 1);
+          const newUsed = Math.max(0, currentUsed - leaveDays);
+          await supabase
+            .from('leave_balances')
+            .update({ used_days: newUsed })
+            .eq('user_id', lReq.user_id);
+        }
       }
 
       // Check if employee has any other active approved leaves for today
@@ -1060,6 +1068,8 @@ export const adminService = {
             displayStatus = sl.short_leave_now ? 'Short Leave' : 'Working';
           } else if (activeLeave.leave_type === 'Power Cut') {
             displayStatus = 'Power Cut';
+          } else if (activeLeave.leave_type === 'Weather Condition') {
+            displayStatus = 'Weather Condition';
           } else {
             displayStatus = `On Leave (${activeLeave.leave_type})`;
           }
@@ -1139,6 +1149,8 @@ export const adminService = {
           displayStatus = sl.short_leave_now ? 'Short Leave' : 'Working';
         } else if (activeLeave.leave_type === 'Power Cut') {
           displayStatus = 'Power Cut';
+        } else if (activeLeave.leave_type === 'Weather Condition') {
+          displayStatus = 'Weather Condition';
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
@@ -1286,8 +1298,10 @@ export const adminService = {
     const leaveType = lReq.leave_type || '';
     const isCasual = leaveType === 'Casual Leave' || leaveType.toLowerCase().includes('casual');
     const isPowerCut = leaveType === 'Power Cut';
+    const isWeatherCondition = leaveType === 'Weather Condition';
+    const isQuotaExempt = isPowerCut || isWeatherCondition;
 
-    if (!isPowerCut) {
+    if (!isQuotaExempt) {
       const casualTotal = 7;
       const annualTotal = 14;
       const annualKeywords = ['medical', 'half day', 'short leave', 'special', 'study'];
@@ -1326,27 +1340,34 @@ export const adminService = {
       .update({ status: 'Approved' })
       .eq('id', id);
 
-    // 3. Update user status to 'On Leave' if today is within leave dates
+    // 3. Update user status if today is within leave dates
     if (lReq.start_date <= todayStr && lReq.end_date >= todayStr) {
+      const targetStatus = lReq.leave_type === 'Power Cut' 
+        ? 'Power Cut' 
+        : lReq.leave_type === 'Weather Condition'
+        ? 'Weather Condition'
+        : 'On Leave';
       await supabase
         .from('users')
-        .update({ status: 'On Leave' })
+        .update({ status: targetStatus })
         .eq('id', lReq.user_id);
     }
 
-    // 4. Update leave balance
-    const { data: balances } = await supabase
-      .from('leave_balances')
-      .select('*')
-      .eq('user_id', lReq.user_id);
-
-    if (balances && balances.length > 0) {
-      const currentUsed = parseFloat(balances[0].used_days || 0);
-      const addDays = parseFloat(lReq.days_count || 1);
-      await supabase
+    // 4. Update leave balance if not quota exempt
+    if (!isQuotaExempt) {
+      const { data: balances } = await supabase
         .from('leave_balances')
-        .update({ used_days: currentUsed + addDays })
+        .select('*')
         .eq('user_id', lReq.user_id);
+
+      if (balances && balances.length > 0) {
+        const currentUsed = parseFloat(balances[0].used_days || 0);
+        const addDays = parseFloat(lReq.days_count || 1);
+        await supabase
+          .from('leave_balances')
+          .update({ used_days: currentUsed + addDays })
+          .eq('user_id', lReq.user_id);
+      }
     }
 
     return { message: 'Leave request approved successfully' };

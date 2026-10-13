@@ -279,8 +279,12 @@ export default function AllLeavesTable({ leaves = [] }) {
                           ⏱️ Short Leave
                         </span>
                       ) : item.leave_type === 'Power Cut' ? (
-                        <span className="bg-amber-50 text-amber-800 border border-amber-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1">
+                        <span className="bg-amber-50 text-amber-800 border border-amber-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shadow-2xs">
                           ⚡ Power Cut
+                        </span>
+                      ) : item.leave_type === 'Weather Condition' ? (
+                        <span className="bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1 shadow-2xs">
+                          🌧️ Weather Condition
                         </span>
                       ) : (
                         <span className="text-slate-800">{item.leave_type}</span>
