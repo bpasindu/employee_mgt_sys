@@ -122,37 +122,15 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={clientSearch}
-                onChange={(e) => setClientSearch(e.target.value)}
-                placeholder="Search from 237+ Zoho Books clients..."
-                className="w-full bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
-              />
-            </div>
-
-            <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  toggleClientSelection(e.target.value);
-                  e.target.value = '';
-                }
-              }}
-              className="bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs min-w-[180px]"
-            >
-              <option value="">+ Add Client from List...</option>
-              {availableClients.map((c) => {
-                const name = c.contact_name || c.company_name;
-                return (
-                  <option key={c.id || name} value={name}>
-                    {name}
-                  </option>
-                );
-              })}
-            </select>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              placeholder={`Search from ${availableClients.length > 0 ? availableClients.length + '+ ' : ''}Zoho Books clients...`}
+              className="w-full bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+            />
           </div>
 
           <div className="max-h-36 overflow-y-auto pr-1 flex flex-wrap gap-1.5 pt-1">
