@@ -4,6 +4,7 @@ const requireAuth = require('../middleware/requireAuth');
 const { profileService } = require('../services/backendService');
 const { processBirthdayReminders } = require('../services/birthdayReminder');
 const { syncEmployeeToZoho } = require('../services/zohoService');
+const { uploadProfilePhoto, uploadDocument } = require('../services/cloudinaryService');
 const supabase = require('../db');
 
 // Manual Test Trigger Route for Birthday Reminders
@@ -164,7 +165,7 @@ router.get('/profile/documents', async (req, res) => {
   }
 });
 
-// POST /profile/documents/upload (Base64 payload)
+// POST /profile/documents/upload (Base64 payload via Cloudinary CDN)
 router.post('/profile/documents/upload', async (req, res) => {
   try {
     const { document_data, document_name, user_id, file_type } = req.body;
@@ -174,48 +175,20 @@ router.post('/profile/documents/upload', async (req, res) => {
       return res.status(400).json({ error: 'document_data and document_name are required' });
     }
 
-    // Extract base64 buffer
-    let base64String = document_data;
-    if (document_data.includes('base64,')) {
-      base64String = document_data.split('base64,')[1];
-    }
-    const buffer = Buffer.from(base64String, 'base64');
-
-    // Server-side validation: max 10 MB
-    const maxSize = 10 * 1024 * 1024;
-    if (buffer.length > maxSize) {
-      return res.status(400).json({ error: 'Document file size exceeds 10 MB limit' });
-    }
-
-    const cleanName = document_name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const filePath = `${targetUserId}/${Date.now()}_${cleanName}`;
-
-    // Upload to Supabase storage bucket 'employee-documents'
-    const { data: storageData, error: storageErr } = await supabase.storage
-      .from('employee-documents')
-      .upload(filePath, buffer, {
-        contentType: file_type || 'application/pdf',
-        upsert: true
-      });
-
-    let fileUrl = null;
-    if (!storageErr) {
-      const { data: urlData } = supabase.storage
-        .from('employee-documents')
-        .getPublicUrl(filePath);
-      fileUrl = urlData?.publicUrl;
-    }
-
-    if (storageErr || !fileUrl) {
-      fileUrl = document_data;
-    }
+    // Upload to Cloudinary
+    const cloudRes = await uploadDocument(
+      targetUserId,
+      document_data,
+      document_name,
+      file_type || 'application/pdf'
+    );
 
     const docRecord = await profileService.addDocument(
       targetUserId,
       document_name,
-      fileUrl,
-      filePath,
-      buffer.length,
+      cloudRes.url,
+      cloudRes.public_id,
+      cloudRes.bytes || 0,
       file_type || 'application/pdf'
     );
 
@@ -238,7 +211,7 @@ router.delete('/profile/documents/:id', async (req, res) => {
   }
 });
 
-// POST /profile/photo/upload (Base64 payload)
+// POST /profile/photo/upload (Cloudinary CDN upload)
 router.post('/profile/photo/upload', async (req, res) => {
   try {
     const { photo_data, target_user_id } = req.body;
@@ -248,46 +221,11 @@ router.post('/profile/photo/upload', async (req, res) => {
       return res.status(400).json({ error: 'photo_data is required' });
     }
 
-    let base64String = photo_data;
-    let mimeType = 'image/jpeg';
-    if (photo_data.includes('base64,')) {
-      const parts = photo_data.split('base64,');
-      mimeType = parts[0].split(';')[0].replace('data:', '') || 'image/jpeg';
-      base64String = parts[1];
-    }
-    const buffer = Buffer.from(base64String, 'base64');
+    // Upload and optimize via Cloudinary (auto-crop, auto-format, quality compression)
+    const { url } = await uploadProfilePhoto(targetUserId, photo_data);
 
-    // Server-side validation: max 10 MB
-    const maxSize = 10 * 1024 * 1024;
-    if (buffer.length > maxSize) {
-      return res.status(400).json({ error: 'Photo size exceeds 10 MB limit' });
-    }
-
-    const ext = mimeType.split('/')[1] || 'jpg';
-    const filePath = `${targetUserId}/avatar_${Date.now()}.${ext}`;
-
-    // Upload to Supabase storage bucket 'profile-photos'
-    const { error: storageErr } = await supabase.storage
-      .from('profile-photos')
-      .upload(filePath, buffer, {
-        contentType: mimeType,
-        upsert: true
-      });
-
-    let photoUrl = null;
-    if (!storageErr) {
-      const { data: urlData } = supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(filePath);
-      photoUrl = urlData?.publicUrl;
-    }
-
-    if (storageErr || !photoUrl) {
-      // Fallback to Base64 data URI if storage bucket is unconfigured
-      photoUrl = photo_data;
-    }
-
-    const result = await profileService.updatePhotoUrl(targetUserId, photoUrl, req.user);
+    // Save only the clean Cloudinary HTTPS URL in database
+    const result = await profileService.updatePhotoUrl(targetUserId, url, req.user);
     return res.json(result);
   } catch (err) {
     console.error('Photo upload error:', err);

@@ -1417,11 +1417,13 @@ const adminService = {
       status: r.status,
       applied_date: r.created_at ? r.created_at.split('T')[0] : '',
       duration: r.leave_type === 'Special Leave' && r.day_of_week
-        ? formatSpecialDays(r.day_of_week)
+        ? (r.start_date
+            ? `${formatSpecialDays(r.day_of_week)} (${r.start_date.split('T')[0]}${r.end_date && r.end_date.split('T')[0] !== r.start_date.split('T')[0] ? ` to ${r.end_date.split('T')[0]}` : ''})`
+            : formatSpecialDays(r.day_of_week))
         : (r.leave_type === 'Short Leave' && r.start_time && r.end_time)
-          ? `${formatTime12(r.start_time)} - ${formatTime12(r.end_time)}`
+          ? `${formatTime12(r.start_time)} - ${formatTime12(r.end_time)}${r.start_date ? ` (${r.start_date.split('T')[0]})` : ''}`
           : (r.leave_type === 'Half Day' && r.start_time && r.end_time)
-            ? `${r.start_time} - ${r.end_time} (${r.days_count} day)`
+            ? `${r.start_time} - ${r.end_time} (${r.days_count} day)${r.start_date ? ` (${r.start_date.split('T')[0]})` : ''}`
             : (r.start_date && r.end_date && r.start_date.split('T')[0] === r.end_date.split('T')[0]
                 ? `${r.days_count || 1} day (${r.start_date.split('T')[0]})`
                 : `${r.days_count} days (${r.start_date ? r.start_date.split('T')[0] : ''} to ${r.end_date ? r.end_date.split('T')[0] : ''})`)
