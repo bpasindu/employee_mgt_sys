@@ -48,4 +48,30 @@ router.post('/verify-otp-reset-password', async (req, res) => {
   }
 });
 
+// GET /api/auth/check-email - Check if email is already registered in PWH system
+router.get('/check-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: 'Email parameter is required' });
+    }
+    const result = await authService.checkEmail(email);
+    res.json(result);
+  } catch (err) {
+    console.error('Check email error:', err.message);
+    res.status(500).json({ error: err.message || 'Failed to check email' });
+  }
+});
+
+// POST /api/auth/register-employee - Register new employee and activate account with password
+router.post('/register-employee', async (req, res) => {
+  try {
+    const result = await authService.registerEmployee(req.body);
+    res.json(result);
+  } catch (err) {
+    console.error('Register employee error:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to register employee' });
+  }
+});
+
 module.exports = router;

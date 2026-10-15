@@ -274,7 +274,7 @@ router.delete('/zoho/employee/document/:docType', async (req, res) => {
 // POST /api/zoho/employee - Create employee record directly in Zoho Books Custom Module cm_employee
 router.post('/zoho/employee', async (req, res) => {
   try {
-    const { emp_code, name, dob, date_joined, designation, card_designation, email, phone, address } = req.body;
+    const { emp_code, name, dob, date_joined, designation, card_designation, email, phone, address, documents } = req.body;
     if (!name || !email) {
       return res.status(400).json({ error: 'Name and Email are required fields.' });
     }
@@ -287,7 +287,8 @@ router.post('/zoho/employee', async (req, res) => {
       card_designation,
       email,
       phone,
-      address
+      address,
+      documents
     });
     res.json(result);
   } catch (err) {

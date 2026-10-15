@@ -89,6 +89,32 @@ router.post('/leave/cancel', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/employee/:id - Permanently delete employee from system and optionally Zoho Books
+router.delete('/employee/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleteZoho = req.query.delete_zoho !== 'false' && req.body?.delete_zoho !== false;
+    const result = await adminService.deleteEmployee(id, req.user?.id, deleteZoho);
+    res.json(result);
+  } catch (err) {
+    console.error('Delete employee error:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to delete employee' });
+  }
+});
+
+// POST /api/admin/employee/:id/delete - Alternate POST route for delete
+router.post('/employee/:id/delete', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleteZoho = req.body?.delete_zoho !== false;
+    const result = await adminService.deleteEmployee(id, req.user?.id, deleteZoho);
+    res.json(result);
+  } catch (err) {
+    console.error('Delete employee error:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to delete employee' });
+  }
+});
+
 // GET /api/admin/backup - Downloads complete Supabase database backup JSON
 router.get('/backup', async (req, res) => {
   try {

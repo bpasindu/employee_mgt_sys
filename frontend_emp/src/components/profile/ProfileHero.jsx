@@ -1,8 +1,17 @@
 import React from 'react';
-import { ArrowLeft, Edit3, Briefcase, FileText, Calendar, Camera, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Edit3, Briefcase, FileText, Calendar, Camera, RefreshCw, Trash2, Sparkles } from 'lucide-react';
 import { formatDateDot, calculateTenure } from '../../utils/dateUtils';
 
-export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPhotoModal, onSyncZoho, syncingZoho }) {
+export default function ProfileHero({ 
+  profile, 
+  onBack, 
+  onOpenEditModal, 
+  onOpenPhotoModal, 
+  onSyncZoho, 
+  syncingZoho,
+  onDeleteEmployee,
+  zohoSynced
+}) {
   const name = profile?.name || 'Employee';
   const designation = profile?.designation || '';
   const cardDesignation = profile?.card_designation || '';
@@ -89,6 +98,14 @@ export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPh
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>{status}</span>
             </span>
+
+            {/* Zoho Books Synced Pill */}
+            {(zohoSynced || profile?.zoho_synced) && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30 inline-flex items-center gap-1 shadow-2xs" title="Verified & fetched from Zoho Books">
+                <Sparkles className="w-3 h-3 text-sky-400" />
+                <span>Zoho Books Synced</span>
+              </span>
+            )}
           </div>
 
           {/* Designation & Card Designation */}
@@ -146,7 +163,7 @@ export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPh
           )}
         </div>
 
-        {/* Action Buttons: Edit Profile & Sync Zoho Books */}
+        {/* Action Buttons: Edit Profile, Sync Zoho Books & Delete Employee */}
         <div className="shrink-0 self-center sm:self-start flex flex-wrap items-center gap-2 justify-center sm:justify-end">
           {onSyncZoho && (
             <button
@@ -167,6 +184,17 @@ export default function ProfileHero({ profile, onBack, onOpenEditModal, onOpenPh
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>Edit Profile</span>
+            </button>
+          )}
+
+          {onDeleteEmployee && (
+            <button
+              onClick={onDeleteEmployee}
+              className="bg-rose-600/25 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-500/40 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="Permanently Delete Employee"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Employee</span>
             </button>
           )}
         </div>

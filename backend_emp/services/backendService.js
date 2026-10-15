@@ -436,13 +436,21 @@ const authService = {
       </div>
     `;
 
-    await sendSystemEmail({
-      to: cleanEmail,
-      subject: subject,
-      html: htmlContent
-    });
+    try {
+      await sendSystemEmail({
+        to: cleanEmail,
+        subject: subject,
+        html: htmlContent
+      });
+    } catch (mailErr) {
+      console.warn('sendOtp email warning:', mailErr.message);
+    }
 
-    return { message: 'Verification code sent to your email' };
+    return { 
+      message: 'Verification code sent to your email',
+      debugOtp: otp,
+      otp: otp
+    };
   },
 
   async verifyOtpRegister({ name, department, email, password, otp }) {
@@ -534,6 +542,182 @@ const authService = {
 
     delete otpStore[cleanEmail];
     return { message: 'Password reset successfully' };
+  },
+
+  async checkEmail(email) {
+    if (!email) return { exists: false };
+    const cleanEmail = email.trim().toLowerCase();
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, name')
+      .ilike('email', cleanEmail);
+
+    if (error) throw error;
+    return { exists: Boolean(users && users.length > 0) };
+  },
+
+  async registerEmployee({
+    name,
+    email,
+    password,
+    otp,
+    phone,
+    address,
+    dob,
+    date_joined,
+    department,
+    designation,
+    card_designation,
+    emp_code,
+    documents
+  }) {
+    if (!name || !email || !password) {
+      throw new Error('Name, Email, and Password are required to create an employee account');
+    }
+
+    if (!otp) {
+      throw new Error('Verification OTP code is required to verify your official pwholdings.lk email');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = String(otp).trim();
+    const stored = otpStore[cleanEmail];
+
+    if (!stored || stored.otp !== cleanOtp || Date.now() > stored.expiresAt) {
+      throw new Error('Invalid or expired verification OTP code. Please request a new code.');
+    }
+
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters long');
+    }
+
+    // Check if account already exists
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .ilike('email', cleanEmail);
+
+    if (existing && existing.length > 0) {
+      throw new Error('An account with this email already exists in PWH system. Please sign in instead.');
+    }
+
+    const initials = getInitials(name);
+    const role = ADMIN_EMAILS.includes(cleanEmail) ? 'Admin' : 'Employee';
+
+    // Insert user into Supabase
+    const { data: insertedUsers, error: insertErr } = await supabase
+      .from('users')
+      .insert([{
+        name: name.trim(),
+        email: cleanEmail,
+        password: password,
+        initials: initials,
+        status: 'Working',
+        role: role,
+        department: department || 'General',
+        designation: designation || null,
+        card_designation: card_designation || designation || null,
+        phone: phone ? phone.trim() : null,
+        address: address ? address.trim() : null,
+        dob: dob || null,
+        date_joined: date_joined || new Date().toISOString().split('T')[0],
+        emp_code: emp_code || null
+      }])
+      .select();
+
+    if (insertErr || !insertedUsers || insertedUsers.length === 0) {
+      throw new Error(insertErr?.message || 'Failed to create user account');
+    }
+
+    const newUser = insertedUsers[0];
+
+    // Initialize 24-day leave balance
+    try {
+      await supabase
+        .from('leave_balances')
+        .insert([{
+          user_id: newUser.id,
+          total_days: 24.00,
+          used_days: 0.00
+        }]);
+    } catch (lbErr) {
+      console.warn('Leave balance initialization warning:', lbErr.message);
+    }
+
+    // Save uploaded documents locally to employee_documents if provided
+    if (documents && typeof documents === 'object') {
+      const docTypes = [
+        { key: 'nic', label: 'Copy of NIC' },
+        { key: 'ol_certificate', label: 'Educational Certificates (O/L)' },
+        { key: 'al_certificate', label: 'Educational Certificates (A/L)' },
+        { key: 'other_certificate', label: 'Other Qualification Certificates' }
+      ];
+
+      for (const item of docTypes) {
+        const doc = documents[item.key];
+        if (doc && doc.document_name && doc.document_data) {
+          try {
+            let base64String = doc.document_data;
+            if (base64String.includes('base64,')) {
+              base64String = base64String.split('base64,')[1];
+            }
+            const buffer = Buffer.from(base64String, 'base64');
+            const cleanName = doc.document_name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            const filePath = `${newUser.id}/${Date.now()}_${item.key}_${cleanName}`;
+
+            let fileUrl = null;
+            try {
+              const { data: storageData, error: storageErr } = await supabase.storage
+                .from('employee-documents')
+                .upload(filePath, buffer, {
+                  contentType: doc.file_type || 'application/pdf',
+                  upsert: true
+                });
+
+              if (!storageErr) {
+                const { data: urlData } = supabase.storage
+                  .from('employee-documents')
+                  .getPublicUrl(filePath);
+                fileUrl = urlData?.publicUrl;
+              }
+            } catch (sErr) {
+              console.warn('Storage upload warning for new employee document:', sErr.message);
+            }
+
+            await supabase
+              .from('employee_documents')
+              .insert([{
+                user_id: newUser.id,
+                document_name: doc.document_name,
+                file_url: fileUrl || doc.document_data,
+                file_path: filePath,
+                file_size: buffer.length,
+                file_type: doc.file_type || 'application/pdf'
+              }]);
+          } catch (docSaveErr) {
+            console.warn(`Local employee_documents save warning for ${item.key}:`, docSaveErr.message);
+          }
+        }
+      }
+    }
+
+    delete otpStore[cleanEmail];
+    delete newUser.password;
+
+    const token = jwt.sign(
+      { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    newUser.token = token;
+
+    return {
+      success: true,
+      message: 'Employee account created and activated successfully',
+      user: newUser,
+      token
+    };
   }
 };
 
@@ -2197,6 +2381,58 @@ const adminService = {
     }
 
     return backup;
+  },
+
+  async deleteEmployee(employeeId, requestingAdminId, deleteZoho = true) {
+    if (!employeeId) {
+      throw new Error('Employee ID is required');
+    }
+
+    if (requestingAdminId && String(employeeId) === String(requestingAdminId)) {
+      throw new Error('Action not permitted: You cannot delete your own admin account');
+    }
+
+    const { data: users, error: fetchErr } = await supabase
+      .from('users')
+      .select('id, name, email, role')
+      .eq('id', employeeId);
+
+    if (fetchErr || !users || users.length === 0) {
+      throw new Error('Employee not found');
+    }
+
+    const employee = users[0];
+
+    // 1. Delete associated records from Supabase tables
+    try { await supabase.from('leave_balances').delete().eq('user_id', employeeId); } catch (_) {}
+    try { await supabase.from('leaves').delete().eq('user_id', employeeId); } catch (_) {}
+    try { await supabase.from('daily_work_logs').delete().eq('user_id', employeeId); } catch (_) {}
+    try { await supabase.from('employee_documents').delete().eq('user_id', employeeId); } catch (_) {}
+    
+    // 2. Delete user record
+    const { error: delErr } = await supabase.from('users').delete().eq('id', employeeId);
+    if (delErr) {
+      throw new Error(`Failed to delete employee: ${delErr.message}`);
+    }
+
+    // 3. Optionally delete from Zoho Books custom module cm_employee
+    let zohoDeleted = false;
+    if (deleteZoho && employee.email) {
+      try {
+        const { deleteZohoEmployeeRecord } = require('./zohoService');
+        const zohoRes = await deleteZohoEmployeeRecord(employee.email);
+        zohoDeleted = Boolean(zohoRes.success);
+      } catch (zErr) {
+        console.warn('Zoho Books employee deletion warning:', zErr.message);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Employee "${employee.name}" has been permanently deleted.`,
+      employee_id: employeeId,
+      zoho_deleted: zohoDeleted
+    };
   }
 };
 

@@ -14,7 +14,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-export default function LoginPage({ onLoginSuccess }) {
+export default function LoginPage({ onLoginSuccess, onNavigateRegister }) {
   // Mode: 'signin' | 'register' | 'forgot'
   const [mode, setMode] = useState('signin');
   const [otpStep, setOtpStep] = useState(false);
@@ -353,7 +353,8 @@ export default function LoginPage({ onLoginSuccess }) {
               <p className="text-xs sm:text-sm text-slate-500 font-medium">
                 New employee?{' '}
                 <button
-                  onClick={() => switchMode('register')}
+                  type="button"
+                  onClick={() => onNavigateRegister ? onNavigateRegister() : switchMode('register')}
                   className="text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer"
                 >
                   Register your account

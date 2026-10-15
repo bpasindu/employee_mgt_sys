@@ -282,10 +282,40 @@ async function syncEmployeeToZohoBooks(employee, isRetry = false) {
 
       if (resData.code === 0 || resData.module_record) {
         const empCode = resData.module_record?.cf_emp_code || resData.module_record?.record_name || '';
+        const createdRecord = resData.module_record;
+        const recordId = createdRecord?.module_record_id;
+
+        // If documents were provided with the form, upload and link each to the Zoho Books record
+        if (empData.documents && typeof empData.documents === 'object' && recordId) {
+          const docTypes = ['nic', 'ol_certificate', 'al_certificate', 'other_certificate'];
+          for (const dType of docTypes) {
+            const doc = empData.documents[dType];
+            if (doc && doc.document_data && doc.document_name) {
+              try {
+                let base64String = doc.document_data;
+                if (base64String.includes('base64,')) {
+                  base64String = base64String.split('base64,')[1];
+                }
+                const buffer = Buffer.from(base64String, 'base64');
+                await uploadZohoEmployeeDocument(
+                  empData.email,
+                  dType,
+                  buffer,
+                  doc.document_name,
+                  doc.file_type || 'application/pdf',
+                  recordId
+                );
+              } catch (upErr) {
+                console.warn(`Warning: failed to upload ${dType} document during employee creation:`, upErr.message);
+              }
+            }
+          }
+        }
+
         return {
           success: true,
           message: `Employee entry created successfully in Zoho Books! (Assigned EMP CODE: ${empCode || 'Auto-assigned'})`,
-          data: resData.module_record
+          data: createdRecord
         };
       } else {
         console.warn('Zoho Custom Module creation error:', JSON.stringify(resData));
@@ -883,7 +913,7 @@ async function updateZohoEmployeeRecord(email, updates = {}) {
  * Upload a document directly to Zoho Books custom module record and associate with custom field
  * docType: 'nic' | 'ol_certificate' | 'al_certificate' | 'other_certificate'
  */
-async function uploadZohoEmployeeDocument(email, docType, fileBuffer, fileName, mimeType) {
+async function uploadZohoEmployeeDocument(email, docType, fileBuffer, fileName, mimeType, knownRecordId = null) {
   if (!email || !docType || !fileBuffer) {
     throw new Error('Email, docType, and file data are required');
   }
@@ -904,16 +934,18 @@ async function uploadZohoEmployeeDocument(email, docType, fileBuffer, fileName, 
   const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
   const apiDomain = workingApiDomain || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
 
-  let existing = await getZohoEmployeeByEmail(email);
-  if (!existing) {
-    const createRes = await createZohoEmployeeRecord({ email });
-    if (!createRes.success || !createRes.data) {
-      throw new Error(`Failed to create employee in Zoho Books: ${createRes.message}`);
+  let recordId = knownRecordId;
+  if (!recordId) {
+    let existing = await getZohoEmployeeByEmail(email);
+    if (!existing) {
+      const createRes = await createZohoEmployeeRecord({ email });
+      if (!createRes.success || !createRes.data) {
+        throw new Error(`Failed to create employee in Zoho Books: ${createRes.message}`);
+      }
+      existing = { module_record_id: createRes.data.module_record_id };
     }
-    existing = { module_record_id: createRes.data.module_record_id };
+    recordId = existing.module_record_id;
   }
-
-  const recordId = existing.module_record_id;
 
   // 1. Upload attachment to Zoho Books
   const formData = new FormData();
@@ -1060,7 +1092,7 @@ async function syncZohoEmployeeToLocalProfile(userId) {
 
   // 3. Prepare payload from Zoho Books fields to update local user
   const updatePayload = {};
-  if (zohoEmp.emp_code && !user.emp_code) {
+  if (zohoEmp.emp_code) {
     updatePayload.emp_code = zohoEmp.emp_code;
   }
   if (zohoEmp.dob) {
@@ -1075,10 +1107,10 @@ async function syncZohoEmployeeToLocalProfile(userId) {
   if (zohoEmp.card_designation) {
     updatePayload.card_designation = zohoEmp.card_designation;
   }
-  if (zohoEmp.phone && !user.phone) {
+  if (zohoEmp.phone) {
     updatePayload.phone = zohoEmp.phone;
   }
-  if (zohoEmp.address && !user.address) {
+  if (zohoEmp.address) {
     updatePayload.address = zohoEmp.address;
   }
 
@@ -1100,11 +1132,40 @@ async function syncZohoEmployeeToLocalProfile(userId) {
   };
 }
 
+/**
+ * Delete an employee record from Zoho Books Custom Module ('cm_employee') by Email
+ */
+async function deleteZohoEmployeeRecord(email) {
+  if (!email) return { success: false, message: 'Email required' };
+  try {
+    const existing = await getZohoEmployeeByEmail(email);
+    if (!existing || !existing.module_record_id) {
+      return { success: false, message: `No employee record found in Zoho Books with email "${email}"` };
+    }
+
+    const token = await getZohoAccessToken();
+    const orgId = process.env.ZOHO_ORGANIZATION_ID || process.env.ZOHO_BOOKS_ORGANIZATION_ID;
+    const apiDomain = workingApiDomain || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
+
+    const url = `${apiDomain}/books/v3/cm_employee/${existing.module_record_id}?organization_id=${orgId}`;
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}` }
+    });
+    const data = await res.json();
+    return { success: data.code === 0, message: data.message || 'Deleted from Zoho Books' };
+  } catch (err) {
+    console.warn('Delete Zoho employee record warning:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+
 module.exports = {
   getZohoAccessToken,
   createZohoEmployeeRecord,
   getZohoEmployeeByEmail,
   updateZohoEmployeeRecord,
+  deleteZohoEmployeeRecord,
   uploadZohoEmployeeDocument,
   deleteZohoEmployeeDocument,
   getZohoDocument,
