@@ -633,6 +633,13 @@ export const dashboardService = {
       throw new Error('user_id, leave_type, start_date, and end_date are required');
     }
 
+    const todayStr = getTodayStr();
+    const sDate = String(start_date).split('T')[0];
+    const eDate = String(end_date).split('T')[0];
+    if (sDate < todayStr || eDate < todayStr) {
+      throw new Error('Leave requests cannot be submitted for past dates. Please select today or a future date.');
+    }
+
     const days = Number(days_count) || 1;
     const isSpecial = leave_type === 'Special Leave';
     const finalRecurring = isSpecial ? true : (is_recurring ? true : false);

@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { CheckCircle2, XCircle, Ban, Search, Calendar, FileText, FilterX, Clock } from 'lucide-react';
+import { CheckCircle2, XCircle, Ban, Search, Calendar, FileText, FilterX, Clock, X, Loader2 } from 'lucide-react';
 
-export default function AllLeavesTable({ leaves = [] }) {
+export default function AllLeavesTable({ leaves = [], onCancelLeave }) {
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'Approved' | 'Rejected' | 'Cancelled'
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState('');
@@ -17,7 +19,7 @@ export default function AllLeavesTable({ leaves = [] }) {
   const counts = useMemo(() => {
     const approved = leaves.filter(l => l.status === 'Approved').length;
     const rejected = leaves.filter(l => l.status === 'Rejected').length;
-    const cancelled = leaves.filter(l => l.status === 'Cancelled').length;
+    const cancelled = leaves.filter(l => l.status === 'Cancelled' || l.status === 'Cancelled by Admin').length;
     return {
       all: leaves.length,
       approved,
@@ -32,7 +34,7 @@ export default function AllLeavesTable({ leaves = [] }) {
       // 1. Status Filter
       if (activeFilter === 'Approved' && item.status !== 'Approved') return false;
       if (activeFilter === 'Rejected' && item.status !== 'Rejected') return false;
-      if (activeFilter === 'Cancelled' && item.status !== 'Cancelled') return false;
+      if (activeFilter === 'Cancelled' && item.status !== 'Cancelled' && item.status !== 'Cancelled by Admin') return false;
 
       // 2. Date Filter (From Date & To Date)
       const itemFrom = item.from_date || '';
@@ -73,6 +75,19 @@ export default function AllLeavesTable({ leaves = [] }) {
   }, [leaves, activeFilter, searchTerm, fromDate, toDate]);
 
   const hasActiveDateFilter = Boolean(fromDate || toDate);
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget || !onCancelLeave) return;
+    setIsCancelling(true);
+    try {
+      await onCancelLeave(cancelTarget.id);
+      setCancelTarget(null);
+    } catch (err) {
+      console.error('Cancel leave failed:', err);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden mt-8">
@@ -207,12 +222,13 @@ export default function AllLeavesTable({ leaves = [] }) {
               <th className="px-6 py-3.5">Reason</th>
               <th className="px-6 py-3.5">Applied Date</th>
               <th className="px-6 py-3.5 text-center">Status</th>
+              <th className="px-6 py-3.5 text-center">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-medium">
             {filteredLeaves.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-10 text-center text-slate-400 font-medium">
+                <td colSpan={9} className="px-6 py-10 text-center text-slate-400 font-medium">
                   <FileText className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                   No leave records found matching the selected date and status filters.
                 </td>
@@ -232,6 +248,13 @@ export default function AllLeavesTable({ leaves = [] }) {
                     <span className="bg-red-50 text-red-700 border border-red-200 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1">
                       <XCircle className="w-3 h-3 text-red-600" />
                       Rejected
+                    </span>
+                  );
+                } else if (item.status === 'Cancelled by Admin') {
+                  statusBadge = (
+                    <span className="bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold px-2.5 py-1 rounded-md inline-flex items-center gap-1">
+                      <Ban className="w-3 h-3 text-rose-600" />
+                      Cancelled by Admin
                     </span>
                   );
                 } else if (item.status === 'Cancelled') {
@@ -310,6 +333,22 @@ export default function AllLeavesTable({ leaves = [] }) {
 
                     {/* Status */}
                     <td className="px-6 py-4 text-center">{statusBadge}</td>
+
+                    {/* Action */}
+                    <td className="px-6 py-4 text-center">
+                      {(item.status === 'Approved' || item.status === 'Pending') ? (
+                        <button
+                          onClick={() => setCancelTarget(item)}
+                          className="bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 hover:text-rose-800 border border-rose-200 hover:border-rose-300 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                          title="Cancel this leave request"
+                        >
+                          <Ban className="w-3 h-3 text-rose-600" />
+                          <span>Cancel</span>
+                        </button>
+                      ) : (
+                        <span className="text-slate-300 font-bold">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })
@@ -317,6 +356,93 @@ export default function AllLeavesTable({ leaves = [] }) {
           </tbody>
         </table>
       </div>
+
+      {/* Admin Cancel Leave Confirmation Modal */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-600 font-bold text-base">
+                <Ban className="w-5 h-5 text-rose-600" />
+                <span>Cancel Leave Application</span>
+              </div>
+              <button
+                onClick={() => setCancelTarget(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                disabled={isCancelling}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to cancel this leave for <strong className="text-slate-900">{cancelTarget.employee_name}</strong>?
+            </p>
+
+            <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Employee:</span>
+                <span className="font-bold text-slate-800">{cancelTarget.employee_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Leave Type:</span>
+                <span className="font-bold text-slate-800">{cancelTarget.leave_type}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Dates:</span>
+                <span className="font-bold text-slate-800">
+                  {cancelTarget.from_date === cancelTarget.to_date
+                    ? cancelTarget.from_date
+                    : `${cancelTarget.from_date} → ${cancelTarget.to_date}`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Duration:</span>
+                <span className="font-bold text-slate-800">{cancelTarget.duration || `${cancelTarget.days_count} day(s)`}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Current Status:</span>
+                <span className="font-bold text-emerald-600">{cancelTarget.status}</span>
+              </div>
+            </div>
+
+            {cancelTarget.status === 'Approved' && cancelTarget.leave_type !== 'Power Cut' && cancelTarget.leave_type !== 'Weather Condition' && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 leading-relaxed">
+                ✨ <strong>Quota Restoration:</strong> The deducted <strong>{cancelTarget.days_count} day(s)</strong> will be automatically restored back to {cancelTarget.employee_name}&apos;s leave balance immediately upon cancellation.
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCancelTarget(null)}
+                disabled={isCancelling}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                No, Keep Leave
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                disabled={isCancelling}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-xs font-bold text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isCancelling ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  <>
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Yes, Cancel Leave</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

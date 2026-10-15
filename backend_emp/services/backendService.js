@@ -944,6 +944,13 @@ const dashboardService = {
       throw new Error('user_id, leave_type, start_date, and end_date are required');
     }
 
+    const todayStr = getTodayStr();
+    const sDate = String(start_date).split('T')[0];
+    const eDate = String(end_date).split('T')[0];
+    if (sDate < todayStr || eDate < todayStr) {
+      throw new Error('Leave requests cannot be submitted for past dates. Please select today or a future date.');
+    }
+
     const days = Number(days_count) || 1;
     const isSpecial = leave_type === 'Special Leave';
     const finalRecurring = isSpecial ? true : (is_recurring ? true : false);
@@ -1168,7 +1175,7 @@ const adminService = {
         status, reason, created_at,
         users (id, name, email, department, initials, photo_url)
       `)
-      .in('status', ['Approved', 'Rejected', 'Cancelled'])
+      .in('status', ['Approved', 'Rejected', 'Cancelled', 'Cancelled by Admin'])
       .order('created_at', { ascending: false })
       .limit(300);
 
@@ -2031,6 +2038,129 @@ const adminService = {
     })();
 
     return { message: 'Leave rejected successfully' };
+  },
+
+  async cancelLeaveByAdmin(id) {
+    if (!id) throw new Error('id is required');
+    const todayStr = getTodayStr();
+
+    const { data: leaves, error: fErr } = await supabase
+      .from('leave_requests')
+      .select('*')
+      .eq('id', id);
+
+    if (fErr || !leaves || leaves.length === 0) throw new Error('Leave request not found');
+    const lReq = leaves[0];
+
+    if (lReq.status === 'Cancelled by Admin' || lReq.status === 'Cancelled') {
+      throw new Error('Leave request is already cancelled');
+    }
+
+    const previousStatus = lReq.status;
+
+    const { error: uErr } = await supabase
+      .from('leave_requests')
+      .update({ status: 'Cancelled by Admin' })
+      .eq('id', id);
+
+    if (uErr) throw new Error(uErr.message || 'Failed to cancel leave');
+
+    // If leave was Approved, restore quota to employee
+    if (previousStatus === 'Approved') {
+      const isQuotaExempt = lReq.leave_type === 'Power Cut' || lReq.leave_type === 'Weather Condition';
+      if (!isQuotaExempt) {
+        const { data: balances } = await supabase
+          .from('leave_balances')
+          .select('*')
+          .eq('user_id', lReq.user_id);
+
+        if (balances && balances.length > 0) {
+          const currentUsed = parseFloat(balances[0].used_days || 0);
+          const leaveDays = parseFloat(lReq.days_count || 1);
+          const newUsed = Math.max(0, currentUsed - leaveDays);
+          await supabase
+            .from('leave_balances')
+            .update({ used_days: newUsed })
+            .eq('user_id', lReq.user_id);
+        }
+      }
+
+      // If active today, check if user has other active approved leaves; if none, revert to Working
+      const { data: otherActiveLeaves } = await supabase
+        .from('leave_requests')
+        .select('id')
+        .eq('user_id', lReq.user_id)
+        .eq('status', 'Approved')
+        .lte('start_date', todayStr)
+        .gte('end_date', todayStr)
+        .neq('id', id);
+
+      if (!otherActiveLeaves || otherActiveLeaves.length === 0) {
+        await supabase
+          .from('users')
+          .update({ status: 'Working' })
+          .eq('id', lReq.user_id);
+      }
+    }
+
+    // Trigger async email notification to employee
+    (async () => {
+      try {
+        const { data: u } = await supabase
+          .from('users')
+          .select('name, email, department')
+          .eq('id', lReq.user_id)
+          .single();
+
+        if (u?.email) {
+          const sDate = lReq.start_date ? lReq.start_date.split('T')[0] : '';
+          const eDate = lReq.end_date ? lReq.end_date.split('T')[0] : '';
+          const dateDisplay = sDate === eDate ? sDate : `${sDate} to ${eDate}`;
+          const durationDisplay = lReq.leave_type === 'Special Leave' && lReq.day_of_week
+            ? formatSpecialDays(lReq.day_of_week)
+            : (lReq.leave_type === 'Short Leave' && lReq.start_time && lReq.end_time)
+              ? `${formatTime12(lReq.start_time)} - ${formatTime12(lReq.end_time)} (${lReq.days_count || 0.36} days)`
+              : `${lReq.days_count || 1} ${parseFloat(lReq.days_count) === 1 ? 'day' : 'days'}`;
+
+          const htmlContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+              <div style="background-color: #be123c; padding: 18px 20px; border-radius: 8px; color: #ffffff; text-align: center; margin-bottom: 20px;">
+                <h2 style="margin: 0; font-size: 20px;">Leave Request Cancelled by Admin</h2>
+                <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.85;">P W Holdings - Employee Management System</p>
+              </div>
+              <p style="font-size: 14px; color: #1e293b; line-height: 1.5;">Dear <strong>${u.name || 'Employee'}</strong>,</p>
+              <p style="font-size: 14px; color: #334155; line-height: 1.5;">
+                We would like to inform you that your leave request for <strong>${dateDisplay}</strong> has been <strong>Cancelled by Administration</strong>.${previousStatus === 'Approved' ? ' Any deducted leave balance has been automatically restored.' : ''}
+              </p>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+                <tr style="background-color: #f8fafc;"><td style="padding: 10px; font-weight: bold; width: 35%; border-bottom: 1px solid #e2e8f0;">Leave Type:</td><td style="padding: 10px; color: #2563eb; font-weight: bold; border-bottom: 1px solid #e2e8f0;">${lReq.leave_type}</td></tr>
+                <tr><td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Dates / Time:</td><td style="padding: 10px; font-weight: bold; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${dateDisplay}</td></tr>
+                <tr style="background-color: #f8fafc;"><td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Duration:</td><td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${durationDisplay}</td></tr>
+                <tr><td style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Reason:</td><td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${lReq.reason || 'None provided'}</td></tr>
+                <tr style="background-color: #fff1f2;"><td style="padding: 10px; font-weight: bold; color: #9f1239;">Decision Status:</td><td style="padding: 10px; color: #be123c; font-weight: bold;">Cancelled by Admin</td></tr>
+              </table>
+              <p style="font-size: 12px; color: #64748b; margin-top: 20px; text-align: center;">
+                If you have questions regarding this cancellation, please contact Administration.
+              </p>
+            </div>
+          `;
+
+          await sendSystemEmail({
+            to: u.email,
+            subject: `Leave Request Cancelled by Admin: ${lReq.leave_type} (${dateDisplay})`,
+            html: htmlContent
+          });
+        }
+      } catch (e) {
+        console.warn('Cancel leave email dispatch warning:', e.message);
+      }
+    })();
+
+    return { 
+      message: previousStatus === 'Approved'
+        ? 'Leave request cancelled by Admin and leave quota restored successfully.'
+        : 'Leave request cancelled by Admin successfully.'
+    };
   },
 
   async generateFullBackup() {
