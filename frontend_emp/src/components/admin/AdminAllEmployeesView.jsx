@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import API from '../../api';
-import { Search, ChevronDown, UserCheck, Shield, Building2 } from 'lucide-react';
+import { Search, ChevronDown, UserCheck, Shield, Building2, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
 
 export default function AdminAllEmployeesView({ employees: initialEmployees = [], onSelectEmployee }) {
   const [employees, setEmployees] = useState(initialEmployees);
@@ -9,6 +9,7 @@ export default function AdminAllEmployeesView({ employees: initialEmployees = []
   const [deptFilter, setDeptFilter] = useState('All departments');
   const [statusFilter, setStatusFilter] = useState('All statuses');
   const [workFilter, setWorkFilter] = useState('All Work Status');
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const parseWorkDesc = (rawDesc) => {
     if (!rawDesc) return { cleanText: '', clientTags: [] };
@@ -268,6 +269,13 @@ export default function AdminAllEmployeesView({ employees: initialEmployees = []
     );
   };
 
+  const handleCopyLink = () => {
+    const regUrl = `${window.location.origin}/register`;
+    navigator.clipboard.writeText(regUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -284,6 +292,26 @@ export default function AdminAllEmployeesView({ employees: initialEmployees = []
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Copy Registration Link Button */}
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border shadow-2xs cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 active:scale-95"
+            title="Copy employee registration link to share via email"
+          >
+            {copiedLink ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-emerald-700">Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <LinkIcon className="w-3.5 h-3.5 text-blue-600" />
+                <span>Copy Registration Link</span>
+              </>
+            )}
+          </button>
+
           {/* Search Box */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />

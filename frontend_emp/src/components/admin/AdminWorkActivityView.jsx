@@ -3,10 +3,11 @@ import API from '../../api';
 import { 
   Search, Calendar, Briefcase, User, Filter, ArrowLeft, 
   Clock, ChevronRight, FileText, CheckCircle2, UserCheck, 
-  Building2, Sparkles, Phone, ExternalLink, RefreshCw, AlertCircle 
+  Building2, Sparkles, Phone, ExternalLink, RefreshCw, AlertCircle,
+  Trash2, X
 } from 'lucide-react';
 
-export default function AdminWorkActivityView({ onSelectEmployee }) {
+export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDeleted }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,6 +15,10 @@ export default function AdminWorkActivityView({ onSelectEmployee }) {
   const [deptFilter, setDeptFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
   const [selectedEmpId, setSelectedEmpId] = useState('All');
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  const [deleteZoho, setDeleteZoho] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteStatusMsg, setDeleteStatusMsg] = useState(null);
 
   useEffect(() => {
     fetchWorkActivity();
@@ -32,6 +37,30 @@ export default function AdminWorkActivityView({ onSelectEmployee }) {
       setActivities([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!employeeToDelete?.id) return;
+    setIsDeleting(true);
+    setDeleteStatusMsg(null);
+    try {
+      const res = await API.delete(`/admin/employee/${employeeToDelete.id}?delete_zoho=${deleteZoho}`);
+      setDeleteStatusMsg({ type: 'success', text: res.data?.message || 'Employee deleted successfully.' });
+      setTimeout(() => {
+        const deletedId = employeeToDelete.id;
+        setEmployeeToDelete(null);
+        setSelectedEmpId('All');
+        fetchWorkActivity();
+        if (onEmployeeDeleted) onEmployeeDeleted(deletedId);
+        setDeleteStatusMsg(null);
+      }, 900);
+    } catch (err) {
+      console.error('Delete employee error:', err);
+      const msg = err.response?.data?.error || err.message || 'Failed to delete employee';
+      setDeleteStatusMsg({ type: 'error', text: msg });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -335,7 +364,7 @@ export default function AdminWorkActivityView({ onSelectEmployee }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
             {onSelectEmployee && (
               <button
                 type="button"
@@ -346,6 +375,20 @@ export default function AdminWorkActivityView({ onSelectEmployee }) {
                 <span>View Full Profile</span>
               </button>
             )}
+
+            {/* Delete Employee Button near View Full Profile */}
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteStatusMsg(null);
+                setEmployeeToDelete(activeEmployee);
+              }}
+              className="bg-rose-500/20 hover:bg-rose-600 active:scale-[0.98] text-rose-200 hover:text-white text-xs font-bold px-3.5 py-2.5 rounded-xl border border-rose-500/40 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Delete this employee"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Employee</span>
+            </button>
 
             <button
               type="button"
@@ -565,6 +608,105 @@ export default function AdminWorkActivityView({ onSelectEmployee }) {
           </div>
         )}
       </div>
+
+      {/* Delete Employee Confirmation Modal */}
+      {employeeToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Delete Employee</h3>
+                  <p className="text-[11px] text-slate-500">Permanent account removal</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !isDeleting && setEmployeeToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to delete employee <strong className="text-slate-900">{employeeToDelete.name}</strong>?
+              </p>
+
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Employee:</span>
+                  <span className="font-bold text-slate-800">{employeeToDelete.name}</span>
+                </div>
+                {employeeToDelete.email && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Email:</span>
+                    <span className="font-semibold text-slate-800">{employeeToDelete.email}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Department:</span>
+                  <span className="font-semibold text-slate-800">{employeeToDelete.department || 'General'}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-rose-50 rounded-xl border border-rose-100 text-[11px] text-rose-800 leading-relaxed font-medium">
+                ⚠️ This will permanently remove their user login, daily work log submissions, leave history, balance quotas, and document attachments.
+              </div>
+
+              <label className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={deleteZoho}
+                  onChange={(e) => setDeleteZoho(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                />
+                <span>Also delete record from Zoho Books (`cm_employee`)</span>
+              </label>
+
+              {deleteStatusMsg && (
+                <div className={`p-3 rounded-xl text-xs font-semibold ${
+                  deleteStatusMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}>
+                  {deleteStatusMsg.text}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-4 mt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEmployeeToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Yes, Delete Employee</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

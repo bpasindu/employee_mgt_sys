@@ -29,14 +29,21 @@ import HalfDayAndStudyLeave from './components/admin/HalfDayAndStudyLeave';
 import PendingLeaveRequestsTable from './components/admin/PendingLeaveRequestsTable';
 import AllLeavesTable from './components/admin/AllLeavesTable';
 import AdminAllEmployeesView from './components/admin/AdminAllEmployeesView';
-import AdminAddEmployeeView from './components/admin/AdminAddEmployeeView';
 import AdminWorkActivityView from './components/admin/AdminWorkActivityView';
 import AdminClientAnalyticsView from './components/admin/AdminClientAnalyticsView';
 import LeaveCalendarView from './components/admin/LeaveCalendarView';
+import EmployeeRegistrationPage from './components/EmployeeRegistrationPage';
 
 export default function App() {
-  // Navigation View: 'login' | 'admin' | 'employee'
-  const [currentView, setCurrentView] = useState('login');
+  // Navigation View: 'login' | 'register' | 'admin' | 'employee'
+  const [currentView, setCurrentView] = useState(() => {
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (path.startsWith('/register') || hash.includes('register')) {
+      return 'register';
+    }
+    return 'login';
+  });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -94,8 +101,17 @@ export default function App() {
   const [allLeaves, setAllLeaves] = useState([]);
   const [allEmployees, setAllEmployees] = useState([]);
 
-  // On mount: if a saved session exists, restore the correct view
+  // On mount: if a saved session exists, restore the correct view (unless on /register)
   useEffect(() => {
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const isRegister = path.startsWith('/register') || hash.includes('register');
+
+    if (isRegister) {
+      setCurrentView('register');
+      return;
+    }
+
     if (currentUser) {
       if (currentUser.role === 'Admin') {
         setAdminUser(currentUser);
@@ -109,6 +125,25 @@ export default function App() {
       }
     }
   }, []);
+
+  // Sync browser URL popstate navigation between /register and /
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path.startsWith('/register') || hash.includes('register')) {
+        setCurrentView('register');
+      } else if (currentView === 'register') {
+        if (currentUser) {
+          setCurrentView(currentUser.role === 'Admin' ? 'admin' : 'employee');
+        } else {
+          setCurrentView('login');
+        }
+      }
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, [currentView, currentUser]);
 
   useEffect(() => {
     if (currentView === 'admin') {
@@ -188,6 +223,8 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('emp_mgt_user');
+    localStorage.removeItem('emp_mgt_token');
+    window.history.pushState(null, '', '/');
     setCurrentView('login');
   };
 
@@ -319,7 +356,6 @@ export default function App() {
   const adminTitles = {
     'admin-dashboard': 'Dashboard',
     'all-employees': 'All Employees',
-    'add-employee': 'Add New Employee',
     'work-activity': 'Work Activity',
     'client-analytics': 'Client Analytics',
     'admin-leave-requests': 'Leave Requests',
@@ -336,9 +372,37 @@ export default function App() {
     'visit-form': 'Visiting Form'
   };
 
+  const navigateToRegister = () => {
+    window.history.pushState(null, '', '/register');
+    setCurrentView('register');
+  };
+
+  const navigateToLogin = () => {
+    window.history.pushState(null, '', '/');
+    setCurrentView('login');
+  };
+
+  // VIEW 0: EMPLOYEE REGISTRATION PAGE (Public URL: /register)
+  if (currentView === 'register') {
+    return (
+      <EmployeeRegistrationPage
+        onNavigateLogin={navigateToLogin}
+        onLoginSuccess={(newUser) => {
+          window.history.pushState(null, '', '/');
+          handleLoginSuccess(newUser);
+        }}
+      />
+    );
+  }
+
   // VIEW 1: LANDING LOGIN PAGE (First Page User Sees)
   if (currentView === 'login') {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <LoginPage 
+        onLoginSuccess={handleLoginSuccess} 
+        onNavigateRegister={navigateToRegister}
+      />
+    );
   }
 
   // VIEW 2: ADMIN DASHBOARD
@@ -416,8 +480,6 @@ export default function App() {
 
             {activeTab === 'all-employees' && <AdminAllEmployeesView employees={allEmployees} onSelectEmployee={handleSelectEmployee} />}
 
-            {activeTab === 'add-employee' && <AdminAddEmployeeView />}
-
             {activeTab === 'admin-leave-requests' && (
               <div className="max-w-7xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
@@ -436,7 +498,14 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'work-activity' && <AdminWorkActivityView onSelectEmployee={handleSelectEmployee} />}
+            {activeTab === 'work-activity' && (
+              <AdminWorkActivityView 
+                onSelectEmployee={handleSelectEmployee} 
+                onEmployeeDeleted={() => {
+                  fetchAdminSummary();
+                }}
+              />
+            )}
 
             {activeTab === 'client-analytics' && <AdminClientAnalyticsView />}
 
@@ -450,6 +519,11 @@ export default function App() {
                 }} 
                 user={selectedEmployee || currentUser || adminUser}
                 onSelectEmployee={handleSelectEmployee}
+                onEmployeeDeleted={() => {
+                  setSelectedEmployee(null);
+                  setActiveTab('all-employees');
+                  fetchAdminSummary();
+                }}
               />
             )}
 
