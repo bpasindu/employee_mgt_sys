@@ -227,6 +227,23 @@ export default function App() {
     }
   };
 
+  const handleAdminCancelLeave = async (id) => {
+    const prevLeaves = allLeaves;
+    // Optimistic UI update
+    setAllLeaves(prev => prev.map(l => l.id === id ? { ...l, status: 'Cancelled by Admin' } : l));
+
+    try {
+      await API.post('/admin/leave/cancel', { id });
+      fetchAdminSummary().catch(console.error);
+    } catch (err) {
+      console.error('Failed to cancel leave by admin:', err);
+      setAllLeaves(prevLeaves);
+      const msg = err.response?.data?.error || err.message || 'Failed to cancel leave request';
+      alert(`⚠️ Cancel Failed:\n${msg}`);
+      throw err;
+    }
+  };
+
   // Employee Actions
   const handleSaveWork = async (newDescription, clients = []) => {
     if (!currentUser?.id) return;
@@ -415,7 +432,7 @@ export default function App() {
                   onApprove={handleApproveLeave}
                   onReject={handleRejectLeave}
                 />
-                <AllLeavesTable leaves={allLeaves} />
+                <AllLeavesTable leaves={allLeaves} onCancelLeave={handleAdminCancelLeave} />
               </div>
             )}
 

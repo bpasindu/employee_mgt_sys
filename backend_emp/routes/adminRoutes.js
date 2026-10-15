@@ -77,6 +77,18 @@ router.post('/leave/reject', async (req, res) => {
   }
 });
 
+// POST /api/admin/leave/cancel
+router.post('/leave/cancel', async (req, res) => {
+  try {
+    const { id } = req.body;
+    const result = await adminService.cancelLeaveByAdmin(id);
+    res.json(result);
+  } catch (err) {
+    console.error('Admin cancel leave error:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to cancel leave' });
+  }
+});
+
 // GET /api/admin/backup - Downloads complete Supabase database backup JSON
 router.get('/backup', async (req, res) => {
   try {

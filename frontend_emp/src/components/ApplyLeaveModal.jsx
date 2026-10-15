@@ -3,6 +3,14 @@ import { X, CalendarPlus, Plus, Trash2, Zap, Laptop, Smartphone, Clock, AlertTri
 
 const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+const getTodayDateStr = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, leaveBalance }) {
   const [leaveType, setLeaveType] = useState('Casual Leave');
   const [halfDaySession, setHalfDaySession] = useState('Morning');
@@ -78,7 +86,13 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   const isShortLeaveExceeded = isShortLeave && shortLeaveHours > 3.0;
   const isShortLeaveInvalidTime = isShortLeave && shortLeaveHours <= 0;
 
+  const todayDateStr = getTodayDateStr();
+
   const handleStartDateChange = (val) => {
+    if (val && val < todayDateStr) {
+      setErrorMsg('Leave cannot be requested for past dates. Please select today or a future date.');
+      return;
+    }
     setStartDate(val);
     setErrorMsg('');
     if (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) {
@@ -96,6 +110,10 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   };
 
   const handleEndDateChange = (val) => {
+    if (val && val < todayDateStr) {
+      setErrorMsg('Leave cannot be requested for past dates. Please select today or a future date.');
+      return;
+    }
     setEndDate(val);
     setErrorMsg('');
     if (startDate) {
@@ -230,7 +248,14 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     }
 
     const finalEndDate = (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) ? startDate : endDate;
-    if (!finalEndDate) return;
+    if (!startDate || !finalEndDate) {
+      setErrorMsg('Please select a valid date for your leave.');
+      return;
+    }
+    if (startDate < todayDateStr || finalEndDate < todayDateStr) {
+      setErrorMsg('Leave cannot be requested for past dates. Please select today or a future date.');
+      return;
+    }
 
     setIsSubmitting(true);
     setErrorMsg('');
@@ -745,6 +770,7 @@ Submitted via P W Holdings Employee Management System`;
               <input
                 type="date"
                 required
+                min={todayDateStr}
                 value={startDate}
                 onChange={(e) => handleStartDateChange(e.target.value)}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
@@ -758,6 +784,7 @@ Submitted via P W Holdings Employee Management System`;
                   <input
                     type="date"
                     required
+                    min={todayDateStr}
                     value={startDate}
                     onChange={(e) => handleStartDateChange(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
@@ -768,7 +795,7 @@ Submitted via P W Holdings Employee Management System`;
                   <input
                     type="date"
                     required
-                    min={startDate}
+                    min={startDate && startDate >= todayDateStr ? startDate : todayDateStr}
                     value={endDate}
                     onChange={(e) => handleEndDateChange(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
