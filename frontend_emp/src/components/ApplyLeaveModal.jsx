@@ -20,8 +20,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   const [phoneBattery, setPhoneBattery] = useState('');
 
   // Weather Condition Fields
-  const [highRaining, setHighRaining] = useState(false);
-  const [highThundering, setHighThundering] = useState(false);
+  const [highRainingAndThundering, setHighRainingAndThundering] = useState(false);
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -43,8 +42,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     setEndTime('11:30');
     setLaptopBattery('');
     setPhoneBattery('');
-    setHighRaining(false);
-    setHighThundering(false);
+    setHighRainingAndThundering(false);
     setStartDate('');
     setEndDate('');
     setDaysCount(1);
@@ -205,8 +203,8 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     }
 
     if (isWeatherCondition) {
-      if (!highRaining && !highThundering) {
-        setErrorMsg('Please select at least one condition: High Raining or High Thundering.');
+      if (!highRainingAndThundering) {
+        setErrorMsg('Please select High Raining and Thundering condition.');
         return;
       }
     }
@@ -259,11 +257,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       } else if (isPowerCut) {
         finalReason = `[Power Cut - Laptop: ${laptopBattery}%, Phone: ${phoneBattery}%] ${reason}`.trim();
       } else if (isWeatherCondition) {
-        const conditions = [];
-        if (highRaining) conditions.push('High Raining');
-        if (highThundering) conditions.push('High Thundering');
-        const condStr = conditions.join(', ');
-        finalReason = reason ? `[Weather Condition: ${condStr}] ${reason}`.trim() : `[Weather Condition: ${condStr}]`;
+        finalReason = reason ? `[Weather Condition: High Raining and Thundering] ${reason}`.trim() : `[Weather Condition: High Raining and Thundering]`;
       }
 
       await onSubmitLeave({
@@ -702,7 +696,7 @@ Submitted via P W Holdings Employee Management System`;
             </div>
           )}
 
-          {/* Weather Condition Section: High Raining & High Thundering Tick Buttons */}
+          {/* Weather Condition Section: High Raining and Thundering Tick Button */}
           {isWeatherCondition && (
             <div className="bg-sky-50/70 p-4 rounded-xl border border-sky-200/80 space-y-3 animate-in fade-in duration-150">
               <div className="flex items-center gap-2 text-sky-950 font-bold text-xs">
@@ -710,56 +704,31 @@ Submitted via P W Holdings Employee Management System`;
                 <span>Severe Weather Condition <span className="text-rose-500">*</span></span>
               </div>
               <p className="text-[11px] text-sky-800 font-medium">
-                Select the severe weather condition(s) affecting your location:
+                Confirm the severe weather condition affecting your location:
               </p>
 
-              <div className="grid grid-cols-2 gap-3">
-                {/* High Raining Tick Button */}
+              <div>
+                {/* High Raining and Thundering Tick Button */}
                 <label
                   className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                    highRaining
+                    highRainingAndThundering
                       ? 'bg-sky-100/90 border-sky-600 text-sky-950 shadow-xs'
                       : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'
                   }`}
                 >
                   <input
                     type="checkbox"
-                    checked={highRaining}
+                    checked={highRainingAndThundering}
                     onChange={(e) => {
-                      setHighRaining(e.target.checked);
+                      setHighRainingAndThundering(e.target.checked);
                       setErrorMsg('');
                     }}
                     className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer accent-sky-600"
                   />
                   <div className="min-w-0">
                     <span className="text-xs sm:text-sm font-bold flex items-center gap-1.5 leading-tight">
-                      <span>🌧️</span>
-                      <span>High Raining</span>
-                    </span>
-                  </div>
-                </label>
-
-                {/* High Thundering Tick Button */}
-                <label
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                    highThundering
-                      ? 'bg-amber-100/90 border-amber-600 text-amber-950 shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:border-amber-300'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={highThundering}
-                    onChange={(e) => {
-                      setHighThundering(e.target.checked);
-                      setErrorMsg('');
-                    }}
-                    className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
-                  />
-                  <div className="min-w-0">
-                    <span className="text-xs sm:text-sm font-bold flex items-center gap-1.5 leading-tight">
-                      <span>⚡</span>
-                      <span>High Thundering</span>
+                      <span>⛈️</span>
+                      <span>High Raining and Thundering</span>
                     </span>
                   </div>
                 </label>
