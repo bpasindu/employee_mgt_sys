@@ -68,14 +68,20 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
 
   // Helper to extract clean text and client tags from work description
   const parseWorkDesc = (rawDesc) => {
-    if (!rawDesc) return { cleanText: 'No work details provided.', clientTags: [] };
+    if (!rawDesc) return { cleanText: 'No work details provided.', clientTags: [], afterOfficeHours: null };
     const tagMatch = rawDesc.match(/\[Clients:\s*([^\]]+)\]/i);
     let clientTags = [];
     if (tagMatch && tagMatch[1]) {
       clientTags = tagMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     }
-    const cleanText = rawDesc.replace(/\n?\[Clients:[^\]]+\]/gi, '').trim();
-    return { cleanText: cleanText || 'No work details provided.', clientTags };
+    const afterOfficeMatch = rawDesc.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
+    const afterOfficeHours = afterOfficeMatch ? afterOfficeMatch[1].trim() : null;
+
+    const cleanText = rawDesc
+      .replace(/\n?\[Clients:[^\]]+\]/gi, '')
+      .replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '')
+      .trim();
+    return { cleanText: cleanText || 'No work details provided.', clientTags, afterOfficeHours };
   };
 
   const calculateYearsOfService = (dateJoinedStr) => {
@@ -515,7 +521,7 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
                     {dayLogs.map((item) => {
                       const empName = item.employee_name || item.name || 'Employee';
                       const initials = item.initials || empName.slice(0, 2).toUpperCase();
-                      const { cleanText, clientTags } = parseWorkDesc(item.work_description);
+                      const { cleanText, clientTags, afterOfficeHours } = parseWorkDesc(item.work_description);
 
                       return (
                         <div
@@ -576,6 +582,19 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
                                       <span>{cName}</span>
                                     </span>
                                   ))}
+                                </div>
+                              )}
+
+                              {/* Highlighted After Office Hours (Orange) */}
+                              {afterOfficeHours && (
+                                <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                                  <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
+                                    After Office:
+                                  </span>
+                                  <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                                    <Clock className="w-3 h-3 text-orange-200" />
+                                    <span>{afterOfficeHours}</span>
+                                  </span>
                                 </div>
                               )}
                             </div>

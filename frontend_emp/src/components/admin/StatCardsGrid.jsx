@@ -660,11 +660,22 @@ export default function StatCardsGrid({
                               Reason: {item.reason}
                             </p>
                           )}
-                          {item.today_work && (
-                            <p className="text-[11px] text-slate-600 line-clamp-1 mt-0.5">
-                              💼 Work: {item.today_work}
-                            </p>
-                          )}
+                          {item.today_work && (() => {
+                            const clean = item.today_work.replace(/\n?\[Clients:[^\]]+\]/gi, '').replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '').trim();
+                            const afterOfficeMatch = item.today_work.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
+                            return (
+                              <div className="mt-0.5 space-y-1">
+                                <p className="text-[11px] text-slate-600 line-clamp-1">
+                                  💼 Work: {clean || 'Work submitted'}
+                                </p>
+                                {afterOfficeMatch && afterOfficeMatch[1] && (
+                                  <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded shadow-2xs">
+                                    <span>After Office: {afterOfficeMatch[1].trim()}</span>
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
 
