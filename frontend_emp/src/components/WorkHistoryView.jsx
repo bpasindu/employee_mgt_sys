@@ -24,14 +24,20 @@ export default function WorkHistoryView({ userId }) {
   };
 
   const parseWorkDesc = (rawDesc) => {
-    if (!rawDesc) return { cleanText: '', clientTags: [] };
+    if (!rawDesc) return { cleanText: '', clientTags: [], afterOfficeHours: null };
     const tagMatch = rawDesc.match(/\[Clients:\s*([^\]]+)\]/i);
     let clientTags = [];
     if (tagMatch && tagMatch[1]) {
       clientTags = tagMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     }
-    const cleanText = rawDesc.replace(/\n?\[Clients:[^\]]+\]/gi, '').trim();
-    return { cleanText, clientTags };
+    const afterOfficeMatch = rawDesc.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
+    const afterOfficeHours = afterOfficeMatch ? afterOfficeMatch[1].trim() : null;
+
+    const cleanText = rawDesc
+      .replace(/\n?\[Clients:[^\]]+\]/gi, '')
+      .replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '')
+      .trim();
+    return { cleanText, clientTags, afterOfficeHours };
   };
 
   return (
@@ -53,7 +59,7 @@ export default function WorkHistoryView({ userId }) {
       ) : (
         <div className="space-y-4">
           {entries.map((entry) => {
-            const { cleanText, clientTags } = parseWorkDesc(entry.work_description);
+            const { cleanText, clientTags, afterOfficeHours } = parseWorkDesc(entry.work_description);
             return (
               <div key={entry.id || Math.random()} className="bg-white rounded-2xl p-5 shadow-xs border border-slate-200/80 flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
@@ -79,6 +85,15 @@ export default function WorkHistoryView({ userId }) {
                             <span>{cName}</span>
                           </span>
                         ))}
+                      </div>
+                    )}
+                    {afterOfficeHours && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60">
+                        <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">After Office:</span>
+                        <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                          <Clock className="w-3 h-3 text-orange-200" />
+                          <span>{afterOfficeHours}</span>
+                        </span>
                       </div>
                     )}
                   </div>

@@ -1066,15 +1066,29 @@ const dashboardService = {
     };
   },
 
-  async saveWorkEntry(userId, work_description, clients = []) {
+  async saveWorkEntry(userId, work_description, clients = [], afterOfficeHours = null) {
     if (!userId) throw new Error('user_id is required');
     const todayStr = getTodayStr();
     const clientList = Array.isArray(clients) ? clients : (clients ? [clients] : []);
 
     let finalDescription = (work_description || '').trim();
+    finalDescription = finalDescription.replace(/\n?\[Clients:[^\]]+\]/gi, '').trim();
+    finalDescription = finalDescription.replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '').trim();
+
     if (clientList.length > 0) {
-      finalDescription = finalDescription.replace(/\n?\[Clients:[^\]]+\]/gi, '').trim();
       finalDescription = `${finalDescription}\n[Clients: ${clientList.join(', ')}]`.trim();
+    }
+
+    if (afterOfficeHours) {
+      let timeStr = '';
+      if (typeof afterOfficeHours === 'string') {
+        timeStr = afterOfficeHours.trim();
+      } else if (afterOfficeHours.enabled !== false && afterOfficeHours.startTime && afterOfficeHours.endTime) {
+        timeStr = `${afterOfficeHours.startTime} - ${afterOfficeHours.endTime}`.trim();
+      }
+      if (timeStr) {
+        finalDescription = `${finalDescription}\n[After Office Hours: ${timeStr}]`.trim();
+      }
     }
 
     const { data: existing } = await supabase
@@ -1105,7 +1119,12 @@ const dashboardService = {
     cachedWorkActivityData = null;
     cachedWorkActivityExpiresAt = 0;
 
-    return { message: 'Work entry updated successfully', work_description: finalDescription, clients: clientList };
+    return { 
+      message: 'Work entry updated successfully', 
+      work_description: finalDescription, 
+      clients: clientList,
+      after_office_hours: afterOfficeHours 
+    };
   },
 
   async getWorkHistory(userId) {

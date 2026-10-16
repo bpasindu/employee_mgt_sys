@@ -282,10 +282,15 @@ export default function App() {
   };
 
   // Employee Actions
-  const handleSaveWork = async (newDescription, clients = []) => {
+  const handleSaveWork = async (newDescription, clients = [], afterOfficeHours = null) => {
     if (!currentUser?.id) return;
     try {
-      const res = await API.post('/work-entry', { user_id: currentUser.id, work_description: newDescription, clients });
+      const res = await API.post('/work-entry', { 
+        user_id: currentUser.id, 
+        work_description: newDescription, 
+        clients,
+        after_office_hours: afterOfficeHours
+      });
       setTodayWork(res.data?.work_description || newDescription);
     } catch (err) {
       console.error('Failed to save work entry:', err);

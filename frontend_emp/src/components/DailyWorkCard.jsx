@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Check, Building2, Plus, X, Search, CheckCircle2 } from 'lucide-react';
+import { Save, Check, Building2, Plus, X, Search, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import API from '../api';
 
 export default function DailyWorkCard({ initialWork, onSaveWork }) {
@@ -11,18 +11,85 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
 
+  // After Office Hours State
+  const [hasAfterOffice, setHasAfterOffice] = useState(false);
+  const [afterOfficeStart, setAfterOfficeStart] = useState('17:00');
+  const [afterOfficeEnd, setAfterOfficeEnd] = useState('18:30');
+
+  // Time conversion helpers
+  const formatTime24to12 = (time24) => {
+    if (!time24) return '';
+    if (time24.includes('AM') || time24.includes('PM')) return time24;
+    const [hStr, mStr] = time24.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    if (isNaN(h)) return time24;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    const hDisplay = h < 10 ? `0${h}` : `${h}`;
+    return `${hDisplay}:${m} ${ampm}`;
+  };
+
+  const formatTime12to24 = (time12) => {
+    if (!time12) return '17:00';
+    const match = time12.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!match) return '17:00';
+    let h = parseInt(match[1], 10);
+    const m = match[2];
+    const ampm = (match[3] || '').toUpperCase();
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${h < 10 ? '0' : ''}${h}:${m}`;
+  };
+
+  const calculateDuration = (start24, end24) => {
+    if (!start24 || !end24) return null;
+    const [h1, m1] = start24.split(':').map(Number);
+    const [h2, m2] = end24.split(':').map(Number);
+    const totalMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (totalMinutes <= 0) return null;
+    const hrs = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (hrs === 0) return `${mins} mins`;
+    if (mins === 0) return `${hrs} hr${hrs > 1 ? 's' : ''}`;
+    return `${hrs} hr${hrs > 1 ? 's' : ''} ${mins} mins`;
+  };
+
   useEffect(() => {
     if (initialWork !== undefined) {
       const rawText = initialWork || '';
+
+      // Clients extraction
       const tagMatch = rawText.match(/\[Clients:\s*([^\]]+)\]/i);
       if (tagMatch && tagMatch[1]) {
         const clientList = tagMatch[1].split(',').map(s => s.trim()).filter(Boolean);
         setSelectedClients(clientList);
-        const cleanText = rawText.replace(/\n?\[Clients:[^\]]+\]/gi, '').trim();
-        setWorkText(cleanText);
       } else {
-        setWorkText(rawText);
+        setSelectedClients([]);
       }
+
+      // After Office Hours extraction
+      const afterOfficeMatch = rawText.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
+      if (afterOfficeMatch && afterOfficeMatch[1]) {
+        setHasAfterOffice(true);
+        const parts = afterOfficeMatch[1].split('-').map(s => s.trim());
+        if (parts.length >= 2) {
+          setAfterOfficeStart(formatTime12to24(parts[0]));
+          setAfterOfficeEnd(formatTime12to24(parts[1]));
+        }
+      } else {
+        setHasAfterOffice(false);
+        setAfterOfficeStart('17:00');
+        setAfterOfficeEnd('18:30');
+      }
+
+      // Clean work description text
+      const cleanText = rawText
+        .replace(/\n?\[Clients:[^\]]+\]/gi, '')
+        .replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '')
+        .trim();
+      setWorkText(cleanText);
     }
   }, [initialWork]);
 
@@ -63,7 +130,13 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
     if (isSaving) return;
 
     setIsSaving(true);
-    await onSaveWork(workText, selectedClients);
+    const afterOfficeData = hasAfterOffice ? {
+      enabled: true,
+      startTime: formatTime24to12(afterOfficeStart),
+      endTime: formatTime24to12(afterOfficeEnd)
+    } : null;
+
+    await onSaveWork(workText, selectedClients, afterOfficeData);
     setIsSaving(false);
 
     setSavedSuccess(true);
@@ -192,6 +265,111 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
             rows={4}
             className="w-full border border-slate-200 rounded-xl p-3.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none font-normal"
           />
+        </div>
+
+        {/* AFTER OFFICE HOURS SECTION */}
+        <div className={`p-4 rounded-xl border transition-all ${
+          hasAfterOffice 
+            ? 'bg-slate-50/90 border-blue-200/80 shadow-2xs' 
+            : 'bg-slate-50/70 border-slate-200/80'
+        }`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className={`p-2 rounded-lg shrink-0 mt-0.5 transition-colors ${
+                hasAfterOffice ? 'bg-blue-600 text-white shadow-2xs' : 'bg-slate-200 text-slate-600'
+              }`}>
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-900">
+                    Worked After Office Hours?
+                  </span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600">
+                    Office Hours: 8:30 AM – 5:00 PM
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Record extended work or overtime performed after regular office hours (5:00 PM onwards).
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle switch */}
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={hasAfterOffice}
+                onChange={(e) => setHasAfterOffice(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          {/* Time pickers when enabled */}
+          {hasAfterOffice && (
+            <div className="mt-4 pt-3.5 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+              {/* Custom Start & End Time Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                      <span>Start Time</span>
+                      <span className="text-[10px] text-slate-400 font-normal">(After 5:00 PM)</span>
+                    </label>
+                    <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {formatTime24to12(afterOfficeStart)}
+                    </span>
+                  </div>
+                  <input
+                    type="time"
+                    value={afterOfficeStart}
+                    onChange={(e) => setAfterOfficeStart(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                      <span>End Time</span>
+                    </label>
+                    <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {formatTime24to12(afterOfficeEnd)}
+                    </span>
+                  </div>
+                  <input
+                    type="time"
+                    value={afterOfficeEnd}
+                    onChange={(e) => setAfterOfficeEnd(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Duration and Status display */}
+              <div className="flex items-center justify-between flex-wrap gap-2 pt-0.5">
+                {calculateDuration(afterOfficeStart, afterOfficeEnd) ? (
+                  <span className="text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                    <Clock className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Duration:</span>
+                    <strong className="text-slate-900 font-extrabold">
+                      {calculateDuration(afterOfficeStart, afterOfficeEnd)}
+                    </strong>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      ({formatTime24to12(afterOfficeStart)} – {formatTime24to12(afterOfficeEnd)})
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>End time should be after start time</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer info & button */}

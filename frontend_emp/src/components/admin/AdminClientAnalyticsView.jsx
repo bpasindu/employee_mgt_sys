@@ -30,14 +30,20 @@ export default function AdminClientAnalyticsView() {
   };
 
   const parseLogDesc = (rawDesc) => {
-    if (!rawDesc) return { cleanText: 'No details provided.', clientTags: [] };
+    if (!rawDesc) return { cleanText: 'No details provided.', clientTags: [], afterOfficeHours: null };
     const tagMatch = rawDesc.match(/\[Clients:\s*([^\]]+)\]/i);
     let clientTags = [];
     if (tagMatch && tagMatch[1]) {
       clientTags = tagMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     }
-    const cleanText = rawDesc.replace(/\n?\[Clients:[^\]]+\]/gi, '').trim();
-    return { cleanText: cleanText || 'No details provided.', clientTags };
+    const afterOfficeMatch = rawDesc.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
+    const afterOfficeHours = afterOfficeMatch ? afterOfficeMatch[1].trim() : null;
+
+    const cleanText = rawDesc
+      .replace(/\n?\[Clients:[^\]]+\]/gi, '')
+      .replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '')
+      .trim();
+    return { cleanText: cleanText || 'No details provided.', clientTags, afterOfficeHours };
   };
 
   const analytics = data?.analytics || [];
@@ -250,7 +256,7 @@ export default function AdminClientAnalyticsView() {
                       {client.logs && client.logs.length > 0 ? (
                         <div className="space-y-2">
                           {client.logs.map((log) => {
-                            const { cleanText } = parseLogDesc(log.work_description);
+                            const { cleanText, afterOfficeHours } = parseLogDesc(log.work_description);
                             return (
                               <div 
                                 key={log.id} 
@@ -270,6 +276,15 @@ export default function AdminClientAnalyticsView() {
                                     <p className="text-xs text-slate-800 font-medium mt-1 leading-relaxed whitespace-pre-wrap">
                                       {cleanText}
                                     </p>
+                                    {afterOfficeHours && (
+                                      <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-1 border-t border-slate-100">
+                                        <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">After Office:</span>
+                                        <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                                          <Clock className="w-3 h-3 text-orange-200" />
+                                          <span>{afterOfficeHours}</span>
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 
