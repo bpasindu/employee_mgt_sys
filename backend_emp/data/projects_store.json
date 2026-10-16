@@ -1,6 +1,25 @@
 {
   "projects": [
     {
+      "id": 4,
+      "name": "E2E Automated Verification Project",
+      "code": "PRJ-E2E-99",
+      "client_name": "P W Holdings Group",
+      "description": "Updated Scope: Full test suite executed with verified role-based access control.",
+      "project_manager_id": 22,
+      "status": "In Progress",
+      "priority": "High",
+      "start_date": "2026-10-16",
+      "target_date": "2026-12-31",
+      "created_by": 13,
+      "created_at": "2026-10-16T10:41:37.784Z",
+      "updated_at": "2026-10-16T10:41:39.215Z",
+      "members": [
+        22,
+        26
+      ]
+    },
+    {
       "id": 3,
       "name": "PW Cloud POS Biometric Sync",
       "code": "PRJ-BIO-01",
@@ -107,9 +126,34 @@
       "is_completed": false,
       "completed_at": null,
       "created_at": "2026-10-16T08:59:48.194Z"
+    },
+    {
+      "id": 6,
+      "project_id": 4,
+      "title": "Complete Phase 1 Architecture Verification",
+      "description": "Ensure all tests pass and UI compiles cleanly",
+      "target_date": "2026-11-01",
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-10-16T10:41:38.498Z"
     }
   ],
   "tasks": [
+    {
+      "id": 8,
+      "project_id": 4,
+      "target_id": 6,
+      "title": "Run frontend and backend regression tests",
+      "description": "Execute build pipeline and test status toggling",
+      "assigned_to": 26,
+      "created_by": 22,
+      "status": "Completed",
+      "priority": "Urgent",
+      "due_date": "2026-10-25",
+      "completed_at": "2026-10-16T10:41:40.083Z",
+      "created_at": "2026-10-16T10:41:38.703Z",
+      "updated_at": "2026-10-16T10:41:40.083Z"
+    },
     {
       "id": 7,
       "project_id": 3,
