@@ -26,18 +26,18 @@ initDatabase();
 initBirthdayCron();
 initBackupCron();
 
-// API Routes
-app.use('/api', dashboardRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api', zohoRoutes);
-app.use('/api', profileRoutes);
-app.use('/api/projects', projectRoutes);
-
 // Basic health check route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'API is running' });
 });
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api', dashboardRoutes);
+app.use('/api', zohoRoutes);
+app.use('/api', profileRoutes);
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, () => {
