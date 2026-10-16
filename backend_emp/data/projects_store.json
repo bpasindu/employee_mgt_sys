@@ -1,0 +1,219 @@
+{
+  "projects": [
+    {
+      "id": 3,
+      "name": "PW Cloud POS Biometric Sync",
+      "code": "PRJ-BIO-01",
+      "client_name": "Helans Group",
+      "description": "Refined scope: Integrate USB HID optical fingerprint scanners with Helan POS.",
+      "project_manager_id": 8,
+      "status": "In Progress",
+      "priority": "High",
+      "start_date": "2026-10-01",
+      "target_date": "2026-12-15",
+      "created_by": 5,
+      "created_at": "2026-10-16T08:59:47.852Z",
+      "updated_at": "2026-10-16T08:59:48.343Z",
+      "members": [
+        16,
+        8
+      ]
+    },
+    {
+      "id": 1,
+      "name": "Helan POS Security & Barcode System",
+      "code": "PRJ-POS-01",
+      "client_name": "Helans Retail",
+      "description": "Updated description by Project Manager Dimath Jayasinghe",
+      "project_manager_id": 8,
+      "status": "In Progress",
+      "priority": "High",
+      "start_date": "2026-09-20",
+      "target_date": "2026-11-15",
+      "created_by": 5,
+      "created_at": "2026-09-20T08:00:00.000Z",
+      "updated_at": "2026-10-16T08:50:35.533Z",
+      "members": [
+        8,
+        16,
+        24
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Wycherley International School GRN Module",
+      "code": "PRJ-WIS-02",
+      "client_name": "Wycherley International",
+      "description": "Implement Good Received Note (Purchase Receive) module in Zoho Creator with custom Deluge workflows and student grade promotion function.",
+      "project_manager_id": 10,
+      "status": "In Progress",
+      "priority": "Medium",
+      "start_date": "2026-09-22",
+      "target_date": "2026-11-30",
+      "created_by": 5,
+      "created_at": "2026-09-22T08:00:00.000Z",
+      "updated_at": "2026-09-26T09:00:00.000Z",
+      "members": [
+        10,
+        14,
+        26
+      ]
+    }
+  ],
+  "targets": [
+    {
+      "id": 1,
+      "project_id": 1,
+      "title": "Fix Barcode Printing and Template Alignment",
+      "description": "Ensure zebra barcode printers output crisp readable codes with current POS templates.",
+      "target_date": "2026-10-25",
+      "is_completed": true,
+      "completed_at": "2026-09-28T12:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "project_id": 1,
+      "title": "Complete POS Vulnerability Assessment",
+      "description": "Analyze authentication endpoints and SQL injection vectors in the POS backend.",
+      "target_date": "2026-11-05",
+      "is_completed": false,
+      "completed_at": null
+    },
+    {
+      "id": 3,
+      "project_id": 2,
+      "title": "Deploy GRN Signature Workflow in Deluge",
+      "description": "Add Prepared By, Checked By, and Authorized By signoff triggers on goods receipt note.",
+      "target_date": "2026-11-10",
+      "is_completed": false,
+      "completed_at": null
+    },
+    {
+      "id": 4,
+      "project_id": 1,
+      "title": "New Target by PM",
+      "description": "",
+      "target_date": "2026-11-20",
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-10-16T08:50:35.312Z"
+    },
+    {
+      "id": 5,
+      "project_id": 3,
+      "title": "Complete Biometric Driver Testing",
+      "description": "",
+      "target_date": "2026-11-20",
+      "is_completed": false,
+      "completed_at": null,
+      "created_at": "2026-10-16T08:59:48.194Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": 7,
+      "project_id": 3,
+      "target_id": 5,
+      "title": "Write USB HID biometric driver adapter",
+      "description": "Ensure cross-platform compatibility with Linux and Windows 11",
+      "assigned_to": 16,
+      "created_by": 8,
+      "status": "Completed",
+      "priority": "Urgent",
+      "due_date": "2026-11-05",
+      "completed_at": "2026-10-16T08:59:48.501Z",
+      "created_at": "2026-10-16T08:59:48.195Z",
+      "updated_at": "2026-10-16T08:59:48.501Z"
+    },
+    {
+      "id": 6,
+      "project_id": 1,
+      "target_id": null,
+      "title": "Audit DB connection pooling",
+      "description": "Optimize connections",
+      "assigned_to": 24,
+      "created_by": 8,
+      "status": "Pending",
+      "priority": "High",
+      "due_date": "2026-11-10",
+      "completed_at": null,
+      "created_at": "2026-10-16T08:50:35.313Z",
+      "updated_at": "2026-10-16T08:50:35.313Z"
+    },
+    {
+      "id": 1,
+      "project_id": 1,
+      "target_id": 1,
+      "title": "Debug Barcode ESC/POS commands",
+      "description": "Investigate character misalignment on ESC/POS thermal printer.",
+      "assigned_to": 16,
+      "created_by": 8,
+      "status": "In Progress",
+      "priority": "High",
+      "due_date": "2026-09-28",
+      "completed_at": null,
+      "created_at": "2026-09-24T04:00:00.000Z",
+      "updated_at": "2026-10-16T08:50:26.937Z"
+    },
+    {
+      "id": 2,
+      "project_id": 1,
+      "target_id": 2,
+      "title": "Audit Helan POS API token validation",
+      "description": "Check session expiration and brute-force protection on manager login override.",
+      "assigned_to": 8,
+      "created_by": 8,
+      "status": "In Progress",
+      "priority": "High",
+      "due_date": "2026-10-28",
+      "completed_at": null,
+      "created_at": "2026-09-24T05:00:00.000Z",
+      "updated_at": "2026-09-28T09:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "project_id": 1,
+      "target_id": 2,
+      "title": "Test POS checkout offline mode",
+      "description": "Simulate network disconnection and verify local SQLite sync queues.",
+      "assigned_to": 24,
+      "created_by": 8,
+      "status": "Pending",
+      "priority": "Medium",
+      "due_date": "2026-11-02",
+      "completed_at": null,
+      "created_at": "2026-09-25T08:00:00.000Z",
+      "updated_at": "2026-09-25T08:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "project_id": 2,
+      "target_id": 3,
+      "title": "Draft Wycherley GRN Zoho Creator Form",
+      "description": "Build master-detail form layout for Purchase Orders and GRN line items.",
+      "assigned_to": 10,
+      "created_by": 10,
+      "status": "In Progress",
+      "priority": "High",
+      "due_date": "2026-10-30",
+      "completed_at": null,
+      "created_at": "2026-09-24T10:00:00.000Z",
+      "updated_at": "2026-09-25T09:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "project_id": 2,
+      "target_id": 3,
+      "title": "Write Student Grade Promotion Deluge Script",
+      "description": "Automate student advancement to the next academic year upon annual exam result confirmation.",
+      "assigned_to": 26,
+      "created_by": 10,
+      "status": "Pending",
+      "priority": "Medium",
+      "due_date": "2026-11-12",
+      "completed_at": null,
+      "created_at": "2026-09-24T11:00:00.000Z",
+      "updated_at": "2026-09-24T11:00:00.000Z"
+    }
+  ]
+}

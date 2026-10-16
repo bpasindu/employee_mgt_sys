@@ -33,6 +33,9 @@ import AdminWorkActivityView from './components/admin/AdminWorkActivityView';
 import AdminClientAnalyticsView from './components/admin/AdminClientAnalyticsView';
 import LeaveCalendarView from './components/admin/LeaveCalendarView';
 
+// Project Management Component
+import ProjectManagementView from './components/projects/ProjectManagementView';
+
 export default function App() {
   // Navigation View: 'login' | 'admin' | 'employee'
   const [currentView, setCurrentView] = useState('login');
@@ -262,6 +265,7 @@ export default function App() {
 
   const adminTitles = {
     'admin-dashboard': 'Dashboard',
+    'projects': 'Projects & Tasks',
     'all-employees': 'All Employees',
     'add-employee': 'Add New Employee',
     'work-activity': 'Work Activity',
@@ -274,6 +278,7 @@ export default function App() {
 
   const employeeTitles = {
     'dashboard': 'Dashboard',
+    'projects': 'Projects & Tasks',
     'work-history': "Today's Work Log",
     'profile': 'Employee Profile',
     'leave-history': 'My Leave History',
@@ -356,6 +361,10 @@ export default function App() {
                   onViewAll={() => setActiveTab('admin-leave-requests')}
                 />
               </div>
+            )}
+
+            {activeTab === 'projects' && (
+              <ProjectManagementView currentUser={currentUser || adminUser} allEmployees={allEmployees} />
             )}
 
             {activeTab === 'all-employees' && <AdminAllEmployeesView employees={allEmployees} onSelectEmployee={handleSelectEmployee} />}
@@ -462,6 +471,10 @@ export default function App() {
                 <RecentLeaveRequestsCard requests={recentLeaveRequests} />
               </div>
             </div>
+          )}
+
+          {activeTab === 'projects' && (
+            <ProjectManagementView currentUser={currentUser || user} allEmployees={allEmployees} />
           )}
 
           {activeTab === 'work-history' && <WorkHistoryView userId={currentUser?.id} />}
