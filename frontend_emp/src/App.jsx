@@ -282,14 +282,15 @@ export default function App() {
   };
 
   // Employee Actions
-  const handleSaveWork = async (newDescription, clients = [], afterOfficeHours = null) => {
+  const handleSaveWork = async (newDescription, clients = [], afterOfficeHours = null, workEntries = []) => {
     if (!currentUser?.id) return;
     try {
       const res = await API.post('/work-entry', { 
         user_id: currentUser.id, 
         work_description: newDescription, 
         clients,
-        after_office_hours: afterOfficeHours
+        after_office_hours: afterOfficeHours,
+        work_entries: workEntries
       });
       setTodayWork(res.data?.work_description || newDescription);
     } catch (err) {
@@ -350,8 +351,9 @@ export default function App() {
 
   // Helper for selecting an employee to view profile (Restricted to Admin or Owner)
   const handleSelectEmployee = (emp) => {
-    const isAdmin = user?.role === 'Admin';
-    const isOwner = emp && user && String(emp.id) === String(user.id);
+    if (!emp) return;
+    const isAdmin = currentUser?.role === 'Admin' || currentView === 'admin' || user?.role === 'Admin' || adminUser?.role === 'Admin';
+    const isOwner = (user && String(emp.id) === String(user.id)) || (currentUser && String(emp.id) === String(currentUser.id));
     if (isAdmin || isOwner) {
       setSelectedEmployee(emp);
       setActiveTab('profile');
@@ -589,64 +591,69 @@ export default function App() {
             );
 
             return (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                <div className="lg:col-span-8 space-y-6">
-                  <GreetingBanner user={user} onUpdateStatus={handleUpdateStatus} />
+              <div className="space-y-8">
+                <GreetingBanner user={user} onUpdateStatus={handleUpdateStatus} />
 
-                  {/* Active Emergency Leave Quick-Resume Banner */}
-                  {activeEmergencyLeave && (
-                    <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs transition-all ${
-                      activeEmergencyLeave.leave_type === 'Weather Condition'
-                        ? 'bg-gradient-to-r from-sky-50 to-blue-50/70 border-sky-200 text-sky-950'
-                        : 'bg-gradient-to-r from-amber-50 to-yellow-50/70 border-amber-200 text-amber-950'
-                    }`}>
-                      <div className="flex items-center gap-3.5">
-                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border text-2xl shadow-2xs ${
-                          activeEmergencyLeave.leave_type === 'Weather Condition'
-                            ? 'bg-sky-100 border-sky-300'
-                            : 'bg-amber-100 border-amber-300'
-                        }`}>
-                          {activeEmergencyLeave.leave_type === 'Weather Condition' ? '🌧️' : '⚡'}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/80 border border-slate-200/60 text-slate-700">
-                              {activeEmergencyLeave.leave_type} ({activeEmergencyLeave.status})
-                            </span>
-                          </div>
-                          <p className="text-xs sm:text-sm font-bold text-slate-900 mt-1">
-                            {activeEmergencyLeave.leave_type === 'Weather Condition'
-                              ? 'Weather cleared? You can stop this leave anytime and resume working continuously.'
-                              : 'Power restored? You can stop this leave anytime and resume working continuously.'}
-                          </p>
-                        </div>
+                {/* Active Emergency Leave Quick-Resume Banner */}
+                {activeEmergencyLeave && (
+                  <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs transition-all ${
+                    activeEmergencyLeave.leave_type === 'Weather Condition'
+                      ? 'bg-gradient-to-r from-sky-50 to-blue-50/70 border-sky-200 text-sky-950'
+                      : 'bg-gradient-to-r from-amber-50 to-yellow-50/70 border-amber-200 text-amber-950'
+                  }`}>
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border text-2xl shadow-2xs ${
+                        activeEmergencyLeave.leave_type === 'Weather Condition'
+                          ? 'bg-sky-100 border-sky-300'
+                          : 'bg-amber-100 border-amber-300'
+                      }`}>
+                        {activeEmergencyLeave.leave_type === 'Weather Condition' ? '🌧️' : '⚡'}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCancelLeave(activeEmergencyLeave)}
-                        className="bg-white hover:bg-slate-50 active:scale-95 text-slate-900 font-extrabold text-xs px-4 py-2.5 rounded-xl border border-slate-300 shadow-xs hover:shadow transition-all shrink-0 cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                        <span>Resume Work & Cancel Leave</span>
-                      </button>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/80 border border-slate-200/60 text-slate-700">
+                            {activeEmergencyLeave.leave_type} ({activeEmergencyLeave.status})
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 mt-1">
+                          {activeEmergencyLeave.leave_type === 'Weather Condition'
+                            ? 'Weather cleared? You can stop this leave anytime and resume working continuously.'
+                            : 'Power restored? You can stop this leave anytime and resume working continuously.'}
+                        </p>
+                      </div>
                     </div>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => handleCancelLeave(activeEmergencyLeave)}
+                      className="bg-white hover:bg-slate-50 active:scale-95 text-slate-900 font-extrabold text-xs px-4 py-2.5 rounded-xl border border-slate-300 shadow-xs hover:shadow transition-all shrink-0 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                      <span>Resume Work & Cancel Leave</span>
+                    </button>
+                  </div>
+                )}
 
-                  <DailyWorkCard initialWork={todayWork} onSaveWork={handleSaveWork} />
-                  <TeamDutyStatusCard 
-                    workingWorkforce={workingWorkforce}
-                    todaysLeave={todaysLeave}
-                  />
-                </div>
-                <div className="lg:col-span-4 space-y-6">
-                  <LeaveBalanceCard 
-                    leaveBalance={leaveBalance} 
-                    onOpenApplyLeave={() => setIsApplyLeaveOpen(true)} 
-                  />
-                  <RecentLeaveRequestsCard 
-                    requests={recentLeaveRequests} 
-                    onCancelLeave={handleCancelLeave} 
-                  />
+                {/* Daily Work Entry - Wide Full Width */}
+                <DailyWorkCard initialWork={todayWork} onSaveWork={handleSaveWork} />
+
+                {/* Lower Section: Today's Team Duty Status & Leave Balances on the left, Recent Leave Requests on the right */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                  <div className="lg:col-span-8 space-y-6">
+                    <TeamDutyStatusCard 
+                      workingWorkforce={workingWorkforce}
+                      todaysLeave={todaysLeave}
+                    />
+                    <LeaveBalanceCard 
+                      leaveBalance={leaveBalance} 
+                      onOpenApplyLeave={() => setIsApplyLeaveOpen(true)} 
+                    />
+                  </div>
+                  <div className="lg:col-span-4 space-y-6">
+                    <RecentLeaveRequestsCard 
+                      requests={recentLeaveRequests} 
+                      onCancelLeave={handleCancelLeave} 
+                    />
+                  </div>
                 </div>
               </div>
             );

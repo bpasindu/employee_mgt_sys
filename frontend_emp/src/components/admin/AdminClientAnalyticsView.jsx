@@ -40,6 +40,7 @@ export default function AdminClientAnalyticsView() {
     const afterOfficeHours = afterOfficeMatch ? afterOfficeMatch[1].trim() : null;
 
     const cleanText = rawDesc
+      .replace(/\[WorkEntries:\s*\[.*?\]\]/gis, '')
       .replace(/\n?\[Clients:[^\]]+\]/gi, '')
       .replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '')
       .trim();

@@ -1,15 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { Save, Check, Building2, Plus, X, Search, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Save, 
+  Check, 
+  Building2, 
+  Plus, 
+  Trash2, 
+  Search, 
+  CheckCircle2, 
+  Clock, 
+  AlertCircle, 
+  ChevronDown, 
+  X, 
+  Edit3,
+  HelpCircle
+} from 'lucide-react';
 import API from '../api';
+import { parseWorkDesc } from '../utils/workEntryUtils';
 
 export default function DailyWorkCard({ initialWork, onSaveWork }) {
-  const [workText, setWorkText] = useState('');
+  // Table rows: array of { id, company, isZohoClient, work, status, review }
+  const [rows, setRows] = useState([
+    {
+      id: Date.now(),
+      company: '',
+      isZohoClient: false,
+      work: '',
+      status: 'Pending',
+      review: 'Pending Review'
+    }
+  ]);
+
   const [availableClients, setAvailableClients] = useState([]);
-  const [selectedClients, setSelectedClients] = useState([]);
-  const [clientSearch, setClientSearch] = useState('');
+  const [isLoadingClients, setIsLoadingClients] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [isLoadingClients, setIsLoadingClients] = useState(true);
+
+  // Active row being searched for company
+  const [activeCompanySearchRowId, setActiveCompanySearchRowId] = useState(null);
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
 
   // After Office Hours State
   const [hasAfterOffice, setHasAfterOffice] = useState(false);
@@ -56,24 +84,16 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
     return `${hrs} hr${hrs > 1 ? 's' : ''} ${mins} mins`;
   };
 
+  // Populate from initialWork
   useEffect(() => {
     if (initialWork !== undefined) {
       const rawText = initialWork || '';
+      const { cleanText, clientTags, afterOfficeHours, workEntries } = parseWorkDesc(rawText);
 
-      // Clients extraction
-      const tagMatch = rawText.match(/\[Clients:\s*([^\]]+)\]/i);
-      if (tagMatch && tagMatch[1]) {
-        const clientList = tagMatch[1].split(',').map(s => s.trim()).filter(Boolean);
-        setSelectedClients(clientList);
-      } else {
-        setSelectedClients([]);
-      }
-
-      // After Office Hours extraction
-      const afterOfficeMatch = rawText.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
-      if (afterOfficeMatch && afterOfficeMatch[1]) {
+      // After Office Hours
+      if (afterOfficeHours) {
         setHasAfterOffice(true);
-        const parts = afterOfficeMatch[1].split('-').map(s => s.trim());
+        const parts = afterOfficeHours.split('-').map(s => s.trim());
         if (parts.length >= 2) {
           setAfterOfficeStart(formatTime12to24(parts[0]));
           setAfterOfficeEnd(formatTime12to24(parts[1]));
@@ -84,12 +104,49 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
         setAfterOfficeEnd('18:30');
       }
 
-      // Clean work description text
-      const cleanText = rawText
-        .replace(/\n?\[Clients:[^\]]+\]/gi, '')
-        .replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '')
-        .trim();
-      setWorkText(cleanText);
+      // Populate rows
+      if (workEntries && workEntries.length > 0) {
+        setRows(workEntries.map((entry, idx) => ({
+          id: entry.id || Date.now() + idx,
+          company: entry.company || '',
+          isZohoClient: !!entry.isZohoClient,
+          work: entry.work || '',
+          status: entry.status || 'Pending',
+          review: entry.review || 'Pending Review'
+        })));
+      } else if (clientTags.length > 0) {
+        // Migration from legacy clients
+        setRows(clientTags.map((cName, idx) => ({
+          id: Date.now() + idx,
+          company: cName,
+          isZohoClient: true,
+          work: idx === 0 ? cleanText : '',
+          status: 'Pending',
+          review: 'Pending Review'
+        })));
+      } else if (cleanText) {
+        setRows([
+          {
+            id: Date.now(),
+            company: '',
+            isZohoClient: false,
+            work: cleanText,
+            status: 'Pending',
+            review: 'Pending Review'
+          }
+        ]);
+      } else {
+        setRows([
+          {
+            id: Date.now(),
+            company: '',
+            isZohoClient: false,
+            work: '',
+            status: 'Pending',
+            review: 'Pending Review'
+          }
+        ]);
+      }
     }
   }, [initialWork]);
 
@@ -109,25 +166,70 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
     }
   };
 
-  const toggleClientSelection = (clientName) => {
-    if (!clientName) return;
-    const trimmed = clientName.trim();
-    if (!trimmed) return;
-    if (selectedClients.includes(trimmed)) {
-      setSelectedClients(prev => prev.filter(c => c !== trimmed));
+  // Row Manipulation
+  const handleAddRow = () => {
+    setRows(prev => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        company: '',
+        isZohoClient: false,
+        work: '',
+        status: 'Pending',
+        review: 'Pending Review'
+      }
+    ]);
+  };
+
+  const handleRemoveRow = (id) => {
+    if (rows.length === 1) {
+      // Clear the single row instead of deleting it completely
+      setRows([
+        {
+          id: Date.now(),
+          company: '',
+          isZohoClient: false,
+          work: '',
+          status: 'Pending',
+          review: 'Pending Review'
+        }
+      ]);
     } else {
-      setSelectedClients(prev => [...prev, trimmed]);
+      setRows(prev => prev.filter(r => r.id !== id));
     }
   };
 
-  const filteredClients = availableClients.filter((client) => {
-    const cName = client.contact_name || client.company_name || '';
-    return cName.toLowerCase().includes(clientSearch.toLowerCase());
-  });
+  const handleRowChange = (id, field, value) => {
+    setRows(prev => prev.map(r => (r.id === id ? { ...r, [field]: value } : r)));
+  };
+
+  const handleSelectCompany = (rowId, companyName, isZoho = false) => {
+    handleRowChange(rowId, 'company', companyName);
+    handleRowChange(rowId, 'isZohoClient', isZoho);
+    setActiveCompanySearchRowId(null);
+    setCompanySearchQuery('');
+  };
+
+  // Filtered Zoho clients based on query (User Rule: Do NOT show clients initially, only when searching!)
+  const filteredZohoClients = companySearchQuery.trim().length > 0
+    ? availableClients.filter((client) => {
+        const cName = client.contact_name || client.company_name || '';
+        return cName.toLowerCase().includes(companySearchQuery.trim().toLowerCase());
+      })
+    : [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
+
+    // Filter valid rows
+    const validRows = rows.map(r => ({
+      ...r,
+      company: (r.company || '').trim(),
+      work: (r.work || '').trim(),
+      status: r.status || 'Pending',
+      review: r.review || 'Pending Review'
+    }));
 
     setIsSaving(true);
     const afterOfficeData = hasAfterOffice ? {
@@ -136,7 +238,24 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
       endTime: formatTime24to12(afterOfficeEnd)
     } : null;
 
-    await onSaveWork(workText, selectedClients, afterOfficeData);
+    // Extract clients for legacy analytics and indexing
+    const clientList = Array.from(new Set(
+      validRows.map(r => r.company).filter(Boolean)
+    ));
+
+    // Build human-readable summary
+    const summaryLines = validRows
+      .filter(r => r.company || r.work)
+      .map((r, idx) => {
+        const comp = r.company || 'General / Unspecified';
+        const w = r.work || 'No description';
+        return `${idx + 1}. [${comp}] ${w} (Status: ${r.status} | Client Review: ${r.review})`;
+      });
+
+    let finalWorkText = summaryLines.join('\n');
+    finalWorkText += `\n[WorkEntries: ${JSON.stringify(validRows)}]`;
+
+    await onSaveWork(finalWorkText, clientList, afterOfficeData, validRows);
     setIsSaving(false);
 
     setSavedSuccess(true);
@@ -145,7 +264,7 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200/80 mb-6">
-      {/* Top Label */}
+      {/* Top Header */}
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Daily Work Entry</p>
         <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 flex items-center gap-1">
@@ -156,115 +275,231 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
 
       {/* Main Heading & Subtitle */}
       <h3 className="text-xl font-bold text-slate-900 mt-1">What are you working on today?</h3>
-      <p className="text-xs text-slate-500 mt-0.5 mb-4">
-        Keep your team informed with a clear summary of your priorities for today.
+      <p className="text-xs text-slate-500 mt-0.5 mb-5">
+        Record each client or project worked on, along with your activity description, status, and client review.
       </p>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* ZOHO CLIENT SELECTION */}
-        <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Building2 className="w-4 h-4 text-blue-600" />
-              <span>Select Zoho Books Client(s) Worked For Today</span>
-            </label>
-            <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-200">
-              {selectedClients.length} Selected
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* FOUR-COLUMN WORK ENTRIES TABLE */}
+        <div className="border border-slate-200/90 rounded-2xl overflow-hidden bg-slate-50/40 shadow-2xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs divide-y divide-slate-200">
+              <thead className="bg-slate-100/80 text-[11px] uppercase font-bold text-slate-600 tracking-wider">
+                <tr>
+                  <th className="px-4 py-3.5 w-[22%] min-w-[220px]">1. Select Company / Project</th>
+                  <th className="px-4 py-3.5 w-[48%] min-w-[320px]">2. Relevant Work</th>
+                  <th className="px-4 py-3.5 w-[14%] min-w-[130px] whitespace-nowrap">3. Work Status</th>
+                  <th className="px-4 py-3.5 w-[16%] min-w-[150px] whitespace-nowrap">4. Client's Review</th>
+                  <th className="px-3 py-3.5 w-12 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/70 bg-white font-medium">
+                {rows.map((row, index) => {
+                  const isSearchingThisRow = activeCompanySearchRowId === row.id;
+
+                  return (
+                    <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                      {/* COLUMN 1: SELECT COMPANY (Zoho Search or Manual Entry) */}
+                      <td className="px-4 py-3 align-top min-w-[200px]">
+                        {!isSearchingThisRow && row.company ? (
+                          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-blue-50/60 border border-blue-200/80">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`p-1 rounded-md shrink-0 ${row.isZohoClient ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                <Building2 className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="block font-bold text-slate-900 text-xs truncate" title={row.company}>
+                                  {row.company}
+                                </span>
+                                <span className="text-[10px] text-blue-700 font-semibold">
+                                  {row.isZohoClient ? 'Zoho Books Client' : 'Manual / Custom Project'}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveCompanySearchRowId(row.id);
+                                setCompanySearchQuery(row.company);
+                              }}
+                              className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-white hover:bg-blue-100 px-2 py-1 rounded-md border border-blue-200 transition-colors cursor-pointer shrink-0"
+                            >
+                              Change
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {/* Search / Entry Box */}
+                            <div className="relative flex items-center gap-1.5">
+                              <div className="relative flex-1">
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                  type="text"
+                                  value={isSearchingThisRow ? companySearchQuery : (row.company || '')}
+                                  onFocus={() => {
+                                    setActiveCompanySearchRowId(row.id);
+                                    setCompanySearchQuery(row.company || '');
+                                  }}
+                                  onChange={(e) => {
+                                    setActiveCompanySearchRowId(row.id);
+                                    setCompanySearchQuery(e.target.value);
+                                  }}
+                                  placeholder="Search Zoho client or type name..."
+                                  className="w-full bg-slate-50 focus:bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 rounded-xl pl-8 pr-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition-all"
+                                />
+                              </div>
+
+                              {isSearchingThisRow && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveCompanySearchRowId(null);
+                                    setCompanySearchQuery('');
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                                  title="Close Search"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Dropdown Results (ONLY shown when searching as requested!) */}
+                            {isSearchingThisRow && (
+                              <div className="p-2.5 bg-white rounded-xl border border-blue-200 shadow-md space-y-2 animate-in fade-in duration-150">
+                                {companySearchQuery.trim().length === 0 ? (
+                                  <div className="p-2 text-center text-slate-400 text-[11px] italic">
+                                    Type in search box to find Zoho Books clients, or manually enter company name.
+                                  </div>
+                                ) : (
+                                  <>
+                                    {/* Option to add manually */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectCompany(row.id, companySearchQuery.trim(), false)}
+                                      className="w-full text-left bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-between gap-1 shadow-2xs"
+                                    >
+                                      <span className="truncate">Add manual: "{companySearchQuery.trim()}"</span>
+                                      <Plus className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                                    </button>
+
+                                    {/* Zoho Clients Results */}
+                                    <div className="max-h-36 overflow-y-auto pr-1 space-y-1">
+                                      {isLoadingClients ? (
+                                        <div className="text-xs text-slate-400 italic py-1 text-center">Loading Zoho clients...</div>
+                                      ) : filteredZohoClients.length === 0 ? (
+                                        <div className="text-xs text-slate-400 italic py-1 text-center">
+                                          No Zoho Books clients match "{companySearchQuery}"
+                                        </div>
+                                      ) : (
+                                        filteredZohoClients.slice(0, 15).map((client) => {
+                                          const cName = client.contact_name || client.company_name;
+                                          return (
+                                            <button
+                                              type="button"
+                                              key={client.id || cName}
+                                              onClick={() => handleSelectCompany(row.id, cName, true)}
+                                              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 border border-transparent hover:border-blue-200 transition-all flex items-center justify-between cursor-pointer"
+                                            >
+                                              <span className="truncate">{cName}</span>
+                                              <span className="text-[10px] text-blue-600 font-bold bg-blue-100 px-1.5 py-0.2 rounded shrink-0">
+                                                Zoho
+                                              </span>
+                                            </button>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* COLUMN 2: RELEVANT WORK */}
+                      <td className="px-4 py-3 align-top">
+                        <textarea
+                          value={row.work}
+                          onChange={(e) => handleRowChange(row.id, 'work', e.target.value)}
+                          placeholder="Describe the specific work and tasks performed for this company..."
+                          rows={3}
+                          className="w-full border border-slate-200 bg-slate-50 focus:bg-white rounded-xl p-3 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-y font-normal min-h-[85px] leading-relaxed"
+                        />
+                      </td>
+
+                      {/* COLUMN 3: WORK STATUS */}
+                      <td className="px-4 py-3 align-top whitespace-nowrap">
+                        <select
+                          value={row.status}
+                          onChange={(e) => handleRowChange(row.id, 'status', e.target.value)}
+                          className={`text-xs font-bold rounded-xl px-2.5 py-2 border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-full ${
+                            row.status === 'Completed'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : row.status === 'In Progress'
+                              ? 'bg-blue-50 text-blue-800 border-blue-300'
+                              : 'bg-amber-50 text-amber-800 border-amber-300'
+                          }`}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Completed">Completed</option>
+                        </select>
+                      </td>
+
+                      {/* COLUMN 4: CLIENT'S REVIEW */}
+                      <td className="px-4 py-3 align-top whitespace-nowrap">
+                        <select
+                          value={row.review}
+                          onChange={(e) => handleRowChange(row.id, 'review', e.target.value)}
+                          className={`text-xs font-bold rounded-xl px-2.5 py-2 border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-full ${
+                            row.review === 'Approved'
+                              ? 'bg-teal-50 text-teal-800 border-teal-300'
+                              : row.review === 'Not Approved'
+                              ? 'bg-rose-50 text-rose-800 border-rose-300'
+                              : 'bg-slate-50 text-slate-700 border-slate-300'
+                          }`}
+                        >
+                          <option value="Pending Review">Pending Review</option>
+                          <option value="Approved">Approved</option>
+                          <option value="Not Approved">Not Approved</option>
+                        </select>
+                      </td>
+
+                      {/* COLUMN 5: ACTION (REMOVE ROW) */}
+                      <td className="px-3 py-3 align-top text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRow(row.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Remove row"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Footer: Add Row Action */}
+          <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleAddRow}
+              className="bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:border-blue-300"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Add Company Work Row</span>
+            </button>
+            <span className="text-[11px] font-semibold text-slate-500">
+              {rows.length} {rows.length === 1 ? 'company entry' : 'company entries'}
             </span>
           </div>
-
-          {selectedClients.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-xl border border-blue-100 shadow-2xs">
-              {selectedClients.map((cName) => (
-                <span
-                  key={cName}
-                  className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg border border-blue-700 flex items-center gap-1.5 shadow-2xs"
-                >
-                  <CheckCircle2 className="w-3 h-3 text-blue-200" />
-                  <span>{cName}</span>
-                  <button
-                    type="button"
-                    onClick={() => toggleClientSelection(cName)}
-                    className="hover:text-rose-200 p-0.5 rounded-full transition-colors cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={clientSearch}
-              onChange={(e) => setClientSearch(e.target.value)}
-              placeholder={`Search from ${availableClients.length > 0 ? availableClients.length + '+ ' : ''}Zoho Books clients...`}
-              className="w-full bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
-            />
-          </div>
-
-          <div className="max-h-36 overflow-y-auto pr-1 flex flex-wrap gap-1.5 pt-1">
-            {clientSearch.trim().length > 0 && !selectedClients.includes(clientSearch.trim()) && (
-              <button
-                type="button"
-                onClick={() => {
-                  toggleClientSelection(clientSearch.trim());
-                  setClientSearch('');
-                }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg border border-emerald-700 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
-              >
-                <Plus className="w-3 h-3 text-white" />
-                <span>Add "{clientSearch.trim()}"</span>
-              </button>
-            )}
-            {isLoadingClients ? (
-              <span className="text-xs text-slate-400 italic">Loading Zoho Books clients...</span>
-            ) : filteredClients.length === 0 && clientSearch.trim().length === 0 ? (
-              <span className="text-xs text-slate-400 italic">No clients found matching search</span>
-            ) : (
-              filteredClients.slice(0, 30).map((client) => {
-                const cName = client.contact_name || client.company_name;
-                const isSelected = selectedClients.includes(cName);
-                return (
-                  <button
-                    type="button"
-                    key={client.id || cName}
-                    onClick={() => toggleClientSelection(cName)}
-                    className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
-                      isSelected
-                        ? 'bg-blue-600 text-white border-blue-700 shadow-2xs font-bold'
-                        : 'bg-white text-slate-700 border-slate-200/90 hover:border-blue-300 hover:bg-blue-50/50'
-                    }`}
-                  >
-                    <span>{cName}</span>
-                    {isSelected ? <X className="w-3 h-3 text-white" /> : <Plus className="w-3 h-3 text-slate-400" />}
-                  </button>
-                );
-              })
-            )}
-            {filteredClients.length > 30 && (
-              <span className="text-[11px] font-semibold text-slate-400 self-center px-1">
-                + {filteredClients.length - 30} more (use search to find specific client)
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Work Description Textarea */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-            Today's work description
-          </label>
-          <textarea
-            value={workText}
-            onChange={(e) => setWorkText(e.target.value.slice(0, 500))}
-            placeholder="Describe your goals and tasks for today..."
-            rows={4}
-            className="w-full border border-slate-200 rounded-xl p-3.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none font-normal"
-          />
         </div>
 
         {/* AFTER OFFICE HOURS SECTION */}
@@ -310,7 +545,6 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
           {/* Time pickers when enabled */}
           {hasAfterOffice && (
             <div className="mt-4 pt-3.5 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
-              {/* Custom Start & End Time Inputs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -348,7 +582,7 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
                 </div>
               </div>
 
-              {/* Duration and Status display */}
+              {/* Duration display */}
               <div className="flex items-center justify-between flex-wrap gap-2 pt-0.5">
                 {calculateDuration(afterOfficeStart, afterOfficeEnd) ? (
                   <span className="text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
@@ -375,7 +609,7 @@ export default function DailyWorkCard({ initialWork, onSaveWork }) {
         {/* Footer info & button */}
         <div className="flex items-center justify-between pt-1">
           <span className="text-xs text-slate-400 font-medium">
-            {workText.length}/500 characters
+            {rows.filter(r => r.company || r.work).length} of {rows.length} rows filled
           </span>
 
           <div className="flex items-center gap-3">
