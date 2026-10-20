@@ -6,10 +6,14 @@ import {
   Building2, Sparkles, Phone, ExternalLink, RefreshCw, AlertCircle,
   Trash2, X
 } from 'lucide-react';
+import { TodayWorkTableDisplay, parseWorkDesc } from '../../utils/workEntryUtils';
+
+// In-memory cache for zero-latency tab switching
+let memoryCachedActivities = null;
 
 export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDeleted }) {
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState(memoryCachedActivities || []);
+  const [loading, setLoading] = useState(!memoryCachedActivities);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
@@ -21,20 +25,23 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
   const [deleteStatusMsg, setDeleteStatusMsg] = useState(null);
 
   useEffect(() => {
-    fetchWorkActivity();
+    fetchWorkActivity(!!memoryCachedActivities);
   }, []);
 
-  const fetchWorkActivity = async () => {
-    setLoading(true);
+  const fetchWorkActivity = async (silent = false) => {
+    if (!silent && !memoryCachedActivities) setLoading(true);
     setError(null);
     try {
       const res = await API.get('/admin/work-activity');
       const list = Array.isArray(res.data) ? res.data : (res.data?.activities || []);
+      memoryCachedActivities = list;
       setActivities(list);
     } catch (err) {
       console.error('Error fetching work activity:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to fetch work activity');
-      setActivities([]);
+      if (!memoryCachedActivities) {
+        setError(err.response?.data?.error || err.message || 'Failed to fetch work activity');
+        setActivities([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -66,23 +73,7 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
 
   const departments = ['All', 'IT', 'Finance'];
 
-  // Helper to extract clean text and client tags from work description
-  const parseWorkDesc = (rawDesc) => {
-    if (!rawDesc) return { cleanText: 'No work details provided.', clientTags: [], afterOfficeHours: null };
-    const tagMatch = rawDesc.match(/\[Clients:\s*([^\]]+)\]/i);
-    let clientTags = [];
-    if (tagMatch && tagMatch[1]) {
-      clientTags = tagMatch[1].split(',').map(s => s.trim()).filter(Boolean);
-    }
-    const afterOfficeMatch = rawDesc.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
-    const afterOfficeHours = afterOfficeMatch ? afterOfficeMatch[1].trim() : null;
 
-    const cleanText = rawDesc
-      .replace(/\n?\[Clients:[^\]]+\]/gi, '')
-      .replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '')
-      .trim();
-    return { cleanText: cleanText || 'No work details provided.', clientTags, afterOfficeHours };
-  };
 
   const calculateYearsOfService = (dateJoinedStr) => {
     if (!dateJoinedStr) return null;
@@ -374,7 +365,7 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
             {onSelectEmployee && (
               <button
                 type="button"
-                onClick={() => onSelectEmployee({ id: activeEmployee.id, name: activeEmployee.name, photo_url: activeEmployee.photo_url, department: activeEmployee.department })}
+                onClick={() => onSelectEmployee(activeEmployee)}
                 className="bg-white text-blue-900 hover:bg-blue-50 active:scale-[0.98] text-xs font-black px-3.5 py-2.5 rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer"
               >
                 <User className="w-3.5 h-3.5 text-blue-700" />
@@ -521,7 +512,6 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
                     {dayLogs.map((item) => {
                       const empName = item.employee_name || item.name || 'Employee';
                       const initials = item.initials || empName.slice(0, 2).toUpperCase();
-                      const { cleanText, clientTags, afterOfficeHours } = parseWorkDesc(item.work_description);
 
                       return (
                         <div
@@ -548,7 +538,7 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
                             <div className="flex-1 min-w-0">
                               {/* Employee Header (Only when viewing all) */}
                               {selectedEmpId === 'All' && (
-                                <div className="flex items-center gap-2 mb-1.5">
+                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                   <button
                                     type="button"
                                     onClick={() => setSelectedEmpId(item.user_id || empName)}
@@ -559,44 +549,32 @@ export default function AdminWorkActivityView({ onSelectEmployee, onEmployeeDele
                                   <span className="bg-white text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
                                     {item.department}
                                   </span>
-                                </div>
-                              )}
-
-                              {/* Clean Work Description Text (Unboxed, clean readable font) */}
-                              <div className="text-xs text-slate-800 font-medium leading-relaxed whitespace-pre-wrap">
-                                {cleanText}
-                              </div>
-
-                              {/* Selected Client Badges */}
-                              {clientTags.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                    Clients:
-                                  </span>
-                                  {clientTags.map((cName) => (
-                                    <span
-                                      key={cName}
-                                      className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs"
+                                  {onSelectEmployee && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const foundEmp = employeeList.find(e => String(e.id) === String(item.user_id)) || {
+                                          id: item.user_id,
+                                          name: empName,
+                                          department: item.department,
+                                          photo_url: item.photo_url
+                                        };
+                                        onSelectEmployee(foundEmp);
+                                      }}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50/90 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/80 transition-all cursor-pointer shadow-2xs"
+                                      title={`View ${empName}'s full profile`}
                                     >
-                                      <Building2 className="w-3 h-3 text-blue-200" />
-                                      <span>{cName}</span>
-                                    </span>
-                                  ))}
+                                      <User className="w-3 h-3 text-blue-600" />
+                                      <span>View Profile</span>
+                                    </button>
+                                  )}
                                 </div>
                               )}
 
-                              {/* Highlighted After Office Hours (Orange) */}
-                              {afterOfficeHours && (
-                                <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                                  <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
-                                    After Office:
-                                  </span>
-                                  <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
-                                    <Clock className="w-3 h-3 text-orange-200" />
-                                    <span>{afterOfficeHours}</span>
-                                  </span>
-                                </div>
-                              )}
+                              {/* Today's Work 4-column structured display or legacy */}
+                              <div className="mt-1">
+                                <TodayWorkTableDisplay rawWork={item.work_description} />
+                              </div>
                             </div>
                           </div>
 

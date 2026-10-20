@@ -661,7 +661,7 @@ export default function StatCardsGrid({
                             </p>
                           )}
                           {item.today_work && (() => {
-                            const clean = item.today_work.replace(/\n?\[Clients:[^\]]+\]/gi, '').replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '').trim();
+                            const clean = item.today_work.replace(/\[WorkEntries:\s*\[.*?\]\]/gis, '').replace(/\n?\[Clients:[^\]]+\]/gi, '').replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '').trim();
                             const afterOfficeMatch = item.today_work.match(/\[After Office(?:\s*Hours)?:\s*([^\]]+)\]/i);
                             return (
                               <div className="mt-0.5 space-y-1">

@@ -1066,14 +1066,39 @@ const dashboardService = {
     };
   },
 
-  async saveWorkEntry(userId, work_description, clients = [], afterOfficeHours = null) {
+  async saveWorkEntry(userId, work_description, clients = [], afterOfficeHours = null, work_entries = null, entryDate = null, entryId = null) {
     if (!userId) throw new Error('user_id is required');
-    const todayStr = getTodayStr();
-    const clientList = Array.isArray(clients) ? clients : (clients ? [clients] : []);
+    const targetDate = entryDate ? String(entryDate).split('T')[0] : getTodayStr();
+    let clientList = Array.isArray(clients) ? [...clients] : (clients ? [clients] : []);
 
     let finalDescription = (work_description || '').trim();
+
+    let rowsToSave = work_entries;
+    if (!rowsToSave) {
+      const match = finalDescription.match(/\[WorkEntries:\s*(\[.*?\])\]/s);
+      if (match && match[1]) {
+        try {
+          rowsToSave = JSON.parse(match[1]);
+        } catch (e) {}
+      }
+    }
+
+    if (Array.isArray(rowsToSave) && rowsToSave.length > 0) {
+      rowsToSave.forEach(r => {
+        if (r.company && typeof r.company === 'string' && r.company.trim()) {
+          const comp = r.company.trim();
+          if (!clientList.includes(comp)) clientList.push(comp);
+        }
+      });
+    }
+
     finalDescription = finalDescription.replace(/\n?\[Clients:[^\]]+\]/gi, '').trim();
     finalDescription = finalDescription.replace(/\n?\[After Office(?:\s*Hours)?:\s*[^\]]+\]/gi, '').trim();
+    finalDescription = finalDescription.replace(/\n?\[WorkEntries:\s*\[.*?\]\]/gis, '').trim();
+
+    if (Array.isArray(rowsToSave) && rowsToSave.length > 0) {
+      finalDescription = `${finalDescription}\n[WorkEntries: ${JSON.stringify(rowsToSave)}]`.trim();
+    }
 
     if (clientList.length > 0) {
       finalDescription = `${finalDescription}\n[Clients: ${clientList.join(', ')}]`.trim();
@@ -1091,28 +1116,35 @@ const dashboardService = {
       }
     }
 
-    const { data: existing } = await supabase
-      .from('daily_work_entries')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('entry_date', todayStr);
-
     const payload = {
       work_description: finalDescription,
       updated_at: new Date().toISOString()
     };
 
-    if (existing && existing.length > 0) {
+    if (entryId) {
       await supabase
         .from('daily_work_entries')
         .update(payload)
-        .eq('id', existing[0].id);
+        .eq('id', entryId);
     } else {
-      payload.user_id = userId;
-      payload.entry_date = todayStr;
-      await supabase
+      const { data: existing } = await supabase
         .from('daily_work_entries')
-        .insert([payload]);
+        .select('id')
+        .eq('user_id', userId)
+        .eq('entry_date', targetDate);
+
+      if (existing && existing.length > 0) {
+        await supabase
+          .from('daily_work_entries')
+          .update(payload)
+          .eq('id', existing[0].id);
+      } else {
+        payload.user_id = userId;
+        payload.entry_date = targetDate;
+        await supabase
+          .from('daily_work_entries')
+          .insert([payload]);
+      }
     }
 
     // Invalidate work activity cache on new submission
@@ -1923,7 +1955,7 @@ const adminService = {
 
       const result = { activities };
       cachedWorkActivityData = result;
-      cachedWorkActivityExpiresAt = Date.now() + 30 * 1000;
+      cachedWorkActivityExpiresAt = Date.now() + 2 * 60 * 1000;
       return result;
     } catch (err) {
       console.error('getAdminWorkActivity error:', err.message);

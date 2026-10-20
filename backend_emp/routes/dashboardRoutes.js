@@ -48,7 +48,10 @@ router.post('/work-entry', async (req, res) => {
     const afterOfficeHours = req.body.after_office_hours !== undefined 
       ? req.body.after_office_hours 
       : (req.body.afterOfficeHours !== undefined ? req.body.afterOfficeHours : null);
-    const result = await dashboardService.saveWorkEntry(userId, workDescription, clients, afterOfficeHours);
+    const workEntries = req.body.work_entries || req.body.workEntries || null;
+    const entryDate = req.body.entry_date || req.body.entryDate || null;
+    const entryId = req.body.entry_id || req.body.entryId || null;
+    const result = await dashboardService.saveWorkEntry(userId, workDescription, clients, afterOfficeHours, workEntries, entryDate, entryId);
     res.json(result);
   } catch (err) {
     console.error('Save work entry error:', err.message);
