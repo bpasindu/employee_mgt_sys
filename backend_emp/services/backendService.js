@@ -72,11 +72,24 @@ function getInitials(name) {
 // Helper: Format special recurring days
 function formatSpecialDays(dayOfWeekStr) {
   if (!dayOfWeekStr) return 'Special Leave';
-  const parts = dayOfWeekStr.split(',').map(p => p.trim());
+  const parts = dayOfWeekStr.split(',').map(p => p.trim()).filter(Boolean);
   const formatted = parts.map(part => {
     if (part.includes(':')) {
-      const [day, session] = part.split(':');
-      return `${day.slice(0, 3)} (${session})`;
+      const colonIdx = part.indexOf(':');
+      const day = part.slice(0, colonIdx).trim();
+      const session = part.slice(colonIdx + 1).trim();
+      let cleanSession = session;
+      const lower = session.toLowerCase();
+      if (lower.includes('morning')) {
+        cleanSession = 'Morning Half Day';
+      } else if (lower.includes('evening')) {
+        cleanSession = 'Evening Half Day';
+      } else if (lower.includes('half')) {
+        cleanSession = 'Half Day';
+      } else if (lower.includes('full')) {
+        cleanSession = 'Full Day';
+      }
+      return `${day.slice(0, 3)} (${cleanSession})`;
     }
     return part;
   });
@@ -94,9 +107,116 @@ function formatTime12(timeStr) {
   return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
+// Helper: Determine Special Leave details for a specific day (default: today in Colombo timezone)
+function getSpecialLeaveDetails(activeLeave, targetDateStr = null) {
+  if (!activeLeave || activeLeave.leave_type !== 'Special Leave') {
+    return null;
+  }
+
+  // Get weekday name for target date in Asia/Colombo
+  let dayName;
+  if (targetDateStr) {
+    const [y, m, d] = targetDateStr.split('-').map(Number);
+    const dateObj = new Date(Date.UTC(y, m - 1, d, 6, 0, 0));
+    dayName = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, weekday: 'long' }).format(dateObj);
+  } else {
+    dayName = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, weekday: 'long' }).format(new Date());
+  }
+
+  const dayOfWeekStr = activeLeave.day_of_week || '';
+  const entries = dayOfWeekStr.split(',').map(p => p.trim()).filter(Boolean);
+
+  // Find matching entry for target weekday
+  const matchingEntry = entries.find(e => {
+    const d = e.split(':')[0].trim().toLowerCase();
+    return d === dayName.toLowerCase() || dayName.toLowerCase().startsWith(d);
+  });
+
+  if (!matchingEntry) {
+    return {
+      is_special_leave: true,
+      is_active_today: false,
+      today_day_name: dayName,
+      is_half_day: false,
+      session_type: null,
+      half_day_session: null,
+      is_leave_now: false,
+      status_text: 'Working'
+    };
+  }
+
+  const colonIdx = matchingEntry.indexOf(':');
+  const sessionPart = colonIdx !== -1 ? matchingEntry.slice(colonIdx + 1).trim() : 'Full Day';
+  const lowerSession = sessionPart.toLowerCase();
+
+  const isHalfDay = lowerSession.includes('half') || lowerSession.includes('morning') || lowerSession.includes('evening');
+  
+  if (!isHalfDay) {
+    return {
+      is_special_leave: true,
+      is_active_today: true,
+      today_day_name: dayName,
+      is_half_day: false,
+      session_type: 'Full Day',
+      half_day_session: null,
+      is_leave_now: true,
+      leave_time: '08:30 AM - 05:30 PM',
+      working_time: null,
+      status_text: 'Special Leave (Full Day)'
+    };
+  }
+
+  let session = 'Morning';
+  if (lowerSession.includes('evening') || lowerSession.includes('pm') || lowerSession.includes('afternoon') || lowerSession.includes('12:30')) {
+    session = 'Evening';
+  } else if (lowerSession.includes('morning') || lowerSession.includes('am') || lowerSession.includes('8:30')) {
+    session = 'Morning';
+  } else {
+    const extra = `${activeLeave.special_session || ''} ${activeLeave.reason || ''}`.toLowerCase();
+    if (extra.includes('evening') || extra.includes('pm')) {
+      session = 'Evening';
+    }
+  }
+
+  const nowInfo = getNowColombo();
+  const currentMinutes = nowInfo.totalMinutes;
+  const cutoffMinutes = 12 * 60 + 30; // 12:30 PM
+  const isMorningNow = currentMinutes < cutoffMinutes;
+
+  const isLeaveNow = session === 'Morning' ? isMorningNow : !isMorningNow;
+
+  return {
+    is_special_leave: true,
+    is_active_today: true,
+    today_day_name: dayName,
+    is_half_day: true,
+    session_type: 'Half Day',
+    half_day_session: session,
+    half_day_leave_now: isLeaveNow,
+    is_leave_now: isLeaveNow,
+    leave_time: session === 'Morning' ? '08:30 AM - 12:30 PM' : '12:30 PM - 05:30 PM',
+    working_time: session === 'Morning' ? '12:30 PM - 05:30 PM' : '08:30 AM - 12:30 PM',
+    status_text: isLeaveNow ? `Special Leave (${session})` : 'Working'
+  };
+}
+
 // Helper: Determine active half-day session (Morning 8:30 AM - 12:30 PM, Evening 12:30 PM - 5:30 PM)
-function getHalfDayDetails(activeLeave) {
-  if (!activeLeave || activeLeave.leave_type !== 'Half Day') {
+function getHalfDayDetails(activeLeave, targetDateStr = null) {
+  if (!activeLeave) return null;
+
+  if (activeLeave.leave_type === 'Special Leave') {
+    const sp = getSpecialLeaveDetails(activeLeave, targetDateStr);
+    if (!sp || !sp.is_active_today || !sp.is_half_day) return null;
+    return {
+      is_half_day: true,
+      half_day_session: sp.half_day_session,
+      half_day_leave_now: sp.is_leave_now,
+      leave_time: sp.leave_time,
+      working_time: sp.working_time
+    };
+  }
+
+  if (activeLeave.leave_type !== 'Half Day') {
     return null;
   }
 
@@ -771,7 +891,7 @@ const dashboardService = {
           .select('total_days, used_days')
           .eq('user_id', userId)
       ),
-      // 5. Fetch Active Approved Leave Today for user
+      // 5. Fetch Active Approved Leave Today for user (standard and recurring)
       executeWithRetry(() =>
         supabase
           .from('leave_requests')
@@ -779,7 +899,6 @@ const dashboardService = {
           .eq('user_id', userId)
           .eq('status', 'Approved')
           .lte('start_date', todayStr)
-          .gte('end_date', todayStr)
       ),
       // 6. Fetch Recent Leave Requests (Last 5)
       executeWithRetry(() =>
@@ -804,14 +923,13 @@ const dashboardService = {
           .select('user_id, work_description')
           .eq('entry_date', todayStr)
       ),
-      // 9. Team Active Leaves Today
+      // 9. Team Active Leaves Today (standard and recurring)
       executeWithRetry(() =>
         supabase
           .from('leave_requests')
           .select('*')
           .eq('status', 'Approved')
           .lte('start_date', todayStr)
-          .gte('end_date', todayStr)
       )
     ]);
 
@@ -853,13 +971,30 @@ const dashboardService = {
     }
 
     // 4. Fetch Active Approved Leave Today
-    const activeLeavesToday = activeLeavesTodayRes.data || [];
+    const allApprovedLeavesToday = activeLeavesTodayRes.data || [];
     let calculatedStatus = 'Working';
     let hdDetails = null;
     let slDetails = null;
 
-    if (activeLeavesToday && activeLeavesToday.length > 0) {
-      const al = activeLeavesToday[0];
+    let activeLeaveToday = null;
+    for (const l of allApprovedLeavesToday) {
+      if (l.leave_type === 'Special Leave' || l.is_recurring) {
+        const sp = getSpecialLeaveDetails(l, todayStr);
+        if (sp && sp.is_active_today) {
+          activeLeaveToday = l;
+          break;
+        }
+      } else {
+        const eDate = l.end_date ? l.end_date.split('T')[0] : (l.start_date ? l.start_date.split('T')[0] : '');
+        if (eDate >= todayStr) {
+          activeLeaveToday = l;
+          break;
+        }
+      }
+    }
+
+    if (activeLeaveToday) {
+      const al = activeLeaveToday;
       if (al.leave_type === 'Study Leave') {
         calculatedStatus = todayEntry.trim() !== '' ? 'Study Leave / Work Today' : 'Study Leave';
       } else if (al.leave_type === 'Half Day') {
@@ -872,6 +1007,20 @@ const dashboardService = {
         calculatedStatus = 'Power Cut';
       } else if (al.leave_type === 'Weather Condition') {
         calculatedStatus = 'Weather Condition';
+      } else if (al.leave_type === 'Special Leave') {
+        const sp = getSpecialLeaveDetails(al, todayStr);
+        if (sp && sp.is_half_day) {
+          hdDetails = {
+            is_half_day: true,
+            half_day_session: sp.half_day_session,
+            half_day_leave_now: sp.is_leave_now,
+            leave_time: sp.leave_time,
+            working_time: sp.working_time
+          };
+          calculatedStatus = sp.is_leave_now ? `Special Leave (${sp.half_day_session})` : 'Working';
+        } else {
+          calculatedStatus = 'Special Leave';
+        }
       } else {
         calculatedStatus = 'On Leave';
       }
@@ -929,7 +1078,17 @@ const dashboardService = {
     const activeLeaves = activeLeavesRes.data || [];
     const leaveMap = {};
     activeLeaves.forEach(l => {
-      leaveMap[l.user_id] = l;
+      if (l.leave_type === 'Special Leave' || l.is_recurring) {
+        const sp = getSpecialLeaveDetails(l, todayStr);
+        if (sp && sp.is_active_today) {
+          leaveMap[l.user_id] = l;
+        }
+      } else {
+        const eDate = l.end_date ? l.end_date.split('T')[0] : (l.start_date ? l.start_date.split('T')[0] : '');
+        if (eDate >= todayStr) {
+          leaveMap[l.user_id] = l;
+        }
+      }
     });
 
     const workingWorkforce = [];
@@ -955,6 +1114,20 @@ const dashboardService = {
           displayStatus = 'Power Cut';
         } else if (activeLeave.leave_type === 'Weather Condition') {
           displayStatus = 'Weather Condition';
+        } else if (activeLeave.leave_type === 'Special Leave') {
+          const spInfo = getSpecialLeaveDetails(activeLeave, todayStr);
+          if (spInfo && spInfo.is_half_day) {
+            hd = {
+              is_half_day: true,
+              half_day_session: spInfo.half_day_session,
+              half_day_leave_now: spInfo.is_leave_now,
+              leave_time: spInfo.leave_time,
+              working_time: spInfo.working_time
+            };
+            displayStatus = spInfo.is_leave_now ? `Special Leave (${spInfo.half_day_session})` : 'Working';
+          } else {
+            displayStatus = 'Special Leave';
+          }
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
@@ -976,6 +1149,7 @@ const dashboardService = {
         half_day_session: hd ? hd.half_day_session : null,
         half_day_leave_now: hd ? hd.half_day_leave_now : false,
         half_day_time: hd ? hd.leave_time : null,
+        half_day_working_time: hd ? hd.working_time : null,
         is_short_leave: sl ? sl.is_short_leave : false,
         short_leave_now: sl ? sl.short_leave_now : false,
         short_leave_time: sl ? sl.time_range : null,
@@ -1006,6 +1180,27 @@ const dashboardService = {
             });
           } else {
             workingWorkforce.push(formattedEmp);
+          }
+        } else if (activeLeave.leave_type === 'Special Leave') {
+          const spInfo = getSpecialLeaveDetails(activeLeave, todayStr);
+          if (spInfo && spInfo.is_half_day) {
+            if (spInfo.is_leave_now) {
+              todaysLeave.push({
+                ...formattedEmp,
+                leave_type: `Special Leave (${spInfo.half_day_session})`,
+                duration: spInfo.leave_time,
+                leave_reason: activeLeave.reason || 'Special Leave'
+              });
+            } else {
+              workingWorkforce.push(formattedEmp);
+            }
+          } else {
+            todaysLeave.push({
+              ...formattedEmp,
+              leave_type: 'Special Leave',
+              duration: formatSpecialDays(activeLeave.day_of_week),
+              leave_reason: activeLeave.reason || 'Special Leave'
+            });
           }
         } else {
           todaysLeave.push({
@@ -1372,12 +1567,21 @@ const adminService = {
       .from('leave_requests')
       .select('*')
       .eq('status', 'Approved')
-      .lte('start_date', todayStr)
-      .gte('end_date', todayStr);
+      .lte('start_date', todayStr);
 
     const leaveMap = {};
     (activeLeaves || []).forEach(l => {
-      leaveMap[l.user_id] = l;
+      if (l.leave_type === 'Special Leave' || l.is_recurring) {
+        const sp = getSpecialLeaveDetails(l, todayStr);
+        if (sp && sp.is_active_today) {
+          leaveMap[l.user_id] = l;
+        }
+      } else {
+        const eDate = l.end_date ? l.end_date.split('T')[0] : (l.start_date ? l.start_date.split('T')[0] : '');
+        if (eDate >= todayStr) {
+          leaveMap[l.user_id] = l;
+        }
+      }
     });
 
     const { data: pendingRequests } = await supabase
@@ -1454,11 +1658,25 @@ const adminService = {
           displayStatus = 'Power Cut';
         } else if (activeLeave.leave_type === 'Weather Condition') {
           displayStatus = 'Weather Condition';
+        } else if (activeLeave.leave_type === 'Special Leave') {
+          const spInfo = getSpecialLeaveDetails(activeLeave, todayStr);
+          if (spInfo && spInfo.is_half_day) {
+            hd = {
+              is_half_day: true,
+              half_day_session: spInfo.half_day_session,
+              half_day_leave_now: spInfo.is_leave_now,
+              leave_time: spInfo.leave_time,
+              working_time: spInfo.working_time
+            };
+            displayStatus = spInfo.is_leave_now ? `Special Leave (${spInfo.half_day_session})` : 'Working';
+          } else {
+            displayStatus = 'Special Leave';
+          }
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
 
-        const isActivelyOnLeave = activeLeave.leave_type === 'Half Day' 
+        const isActivelyOnLeave = (activeLeave.leave_type === 'Half Day' || (activeLeave.leave_type === 'Special Leave' && hd))
           ? hd.half_day_leave_now 
           : activeLeave.leave_type === 'Short Leave'
           ? sl.short_leave_now
@@ -1547,12 +1765,43 @@ const adminService = {
           });
         } else if (leaveType === 'Special Leave') {
           specialLeaveCount++;
-          onLeaveCount++;
-          specialLeaveEmployees.push({
-            ...formattedEmp,
-            days: formatSpecialDays(activeLeave.day_of_week),
-            reason: activeLeave.reason || 'Special Leave'
-          });
+          const spInfo = getSpecialLeaveDetails(activeLeave, todayStr);
+          if (spInfo && spInfo.is_half_day) {
+            halfDayCount++;
+            halfDayEmployees.push({
+              ...formattedEmp,
+              session: `${spInfo.half_day_session} Session (${spInfo.leave_time})`,
+              half_day_type: `${spInfo.half_day_session} Session`,
+              time: spInfo.leave_time,
+              is_leave_now: spInfo.is_leave_now,
+              leave_time: spInfo.leave_time,
+              working_time: spInfo.working_time,
+              reason: activeLeave.reason || `Special Leave (${spInfo.half_day_session})`
+            });
+            specialLeaveEmployees.push({
+              ...formattedEmp,
+              days: formatSpecialDays(activeLeave.day_of_week),
+              session: `${spInfo.half_day_session} Session (${spInfo.leave_time})`,
+              is_half_day: true,
+              is_leave_now: spInfo.is_leave_now,
+              leave_time: spInfo.leave_time,
+              working_time: spInfo.working_time,
+              reason: activeLeave.reason || 'Special Leave'
+            });
+            if (spInfo.is_leave_now) {
+              onLeaveCount++;
+            } else {
+              workingCount++;
+              workingWorkforce.push(formattedEmp);
+            }
+          } else {
+            onLeaveCount++;
+            specialLeaveEmployees.push({
+              ...formattedEmp,
+              days: formatSpecialDays(activeLeave.day_of_week),
+              reason: activeLeave.reason || 'Special Leave'
+            });
+          }
         } else if (leaveType === 'Casual Leave') {
           casualCount++;
           onLeaveCount++;

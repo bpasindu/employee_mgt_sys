@@ -12,11 +12,24 @@ export function formatTime12(timeStr) {
 // Helper to format special recurring leave days
 export function formatSpecialDays(dayOfWeekStr) {
   if (!dayOfWeekStr) return 'Special Leave';
-  const parts = dayOfWeekStr.split(',').map(p => p.trim());
+  const parts = dayOfWeekStr.split(',').map(p => p.trim()).filter(Boolean);
   const formatted = parts.map(part => {
     if (part.includes(':')) {
-      const [day, session] = part.split(':');
-      return `${day.slice(0, 3)} (${session})`;
+      const colonIdx = part.indexOf(':');
+      const day = part.slice(0, colonIdx).trim();
+      const session = part.slice(colonIdx + 1).trim();
+      let cleanSession = session;
+      const lower = session.toLowerCase();
+      if (lower.includes('morning')) {
+        cleanSession = 'Morning Half Day';
+      } else if (lower.includes('evening')) {
+        cleanSession = 'Evening Half Day';
+      } else if (lower.includes('half')) {
+        cleanSession = 'Half Day';
+      } else if (lower.includes('full')) {
+        cleanSession = 'Full Day';
+      }
+      return `${day.slice(0, 3)} (${cleanSession})`;
     }
     return part;
   });

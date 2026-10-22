@@ -1,6 +1,6 @@
 import React from 'react';
 import { Ban } from 'lucide-react';
-import { getLeaveCancellationStatus } from '../utils/leaveUtils';
+import { getLeaveCancellationStatus, formatSpecialDays } from '../utils/leaveUtils';
 
 export default function RecentLeaveRequestsCard({ requests = [], onCancelLeave }) {
   return (
@@ -19,11 +19,7 @@ export default function RecentLeaveRequestsCard({ requests = [], onCancelLeave }
             const isPowerCut = req.leave_type === 'Power Cut' || req.leave_type?.includes('Power Cut');
             const isWeatherCondition = req.leave_type === 'Weather Condition' || req.leave_type?.includes('Weather Condition');
             const daysText = isSpecial && req.day_of_week 
-              ? req.day_of_week.split(',').map(p => {
-                  const t = p.trim();
-                  if (t.includes(':')) { const [d, s] = t.split(':'); return `${d.slice(0,3)} (${s})`; }
-                  return t;
-                }).join(', ')
+              ? formatSpecialDays(req.day_of_week)
               : isShortLeave && req.start_time && req.end_time
               ? `${req.start_time.slice(0,5)} - ${req.end_time.slice(0,5)}`
               : `${req.days_count} ${req.days_count === 1 ? 'Day' : 'Days'}`;

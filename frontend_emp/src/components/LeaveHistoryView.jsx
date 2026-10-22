@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../api';
 import { ClipboardList, Plus, Ban, AlertTriangle, CheckCircle2, X, Clock } from 'lucide-react';
-import { getLeaveCancellationStatus } from '../utils/leaveUtils';
+import { getLeaveCancellationStatus, formatSpecialDays } from '../utils/leaveUtils';
 
 export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCancelled }) {
   const [leaves, setLeaves] = useState([]);
@@ -112,11 +112,7 @@ export default function LeaveHistoryView({ userId, onOpenApplyLeave, onLeaveCanc
                 const sDate = leave.start_date ? leave.start_date.split('T')[0] : '';
                 const eDate = leave.end_date ? leave.end_date.split('T')[0] : '';
                 const durationText = isSpecial && leave.day_of_week
-                  ? leave.day_of_week.split(',').map(p => {
-                      const t = p.trim();
-                      if (t.includes(':')) { const [d, s] = t.split(':'); return `${d.slice(0,3)} (${s})`; }
-                      return t;
-                    }).join(', ') + ` starting ${sDate}`
+                  ? `${formatSpecialDays(leave.day_of_week)} starting ${sDate}`
                   : isShortLeave && leave.start_time && leave.end_time
                   ? `${sDate} (${leave.start_time.slice(0,5)} - ${leave.end_time.slice(0,5)})`
                   : (sDate === eDate ? sDate : `${sDate} to ${eDate}`);
