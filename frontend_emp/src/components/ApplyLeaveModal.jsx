@@ -18,6 +18,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   const [specialEntries, setSpecialEntries] = useState([]);
   const [pendingDay, setPendingDay] = useState('Monday');
   const [pendingSession, setPendingSession] = useState('Full Day');
+  const [pendingHalfDaySession, setPendingHalfDaySession] = useState('Morning');
   
   // Short Leave Fields
   const [startTime, setStartTime] = useState('09:00');
@@ -46,6 +47,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     setSpecialEntries([]);
     setPendingDay('Monday');
     setPendingSession('Full Day');
+    setPendingHalfDaySession('Morning');
     setStartTime('09:00');
     setEndTime('11:30');
     setLaptopBattery('');
@@ -175,7 +177,15 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       setErrorMsg(`${pendingDay} is already added. Remove it first to change the session.`);
       return;
     }
-    setSpecialEntries(prev => [...prev, { day: pendingDay, session: pendingSession }]);
+    const sessionLabel = pendingSession === 'Full Day' 
+      ? 'Full Day' 
+      : `Half Day (${pendingHalfDaySession})`;
+    setSpecialEntries(prev => [...prev, { 
+      day: pendingDay, 
+      session: sessionLabel,
+      isHalfDay: pendingSession === 'Half Day',
+      halfDaySession: pendingSession === 'Half Day' ? pendingHalfDaySession : null 
+    }]);
     setErrorMsg('');
     const usedDays = [...specialEntries.map(e => e.day), pendingDay];
     const nextDay = ALL_DAYS.find(d => !usedDays.includes(d));
@@ -537,92 +547,154 @@ Submitted via P W Holdings Employee Management System`;
 
 
           {/* Special Leave: Add day + session entries one by one */}
+          {/* Special Leave: Add day + session entries one by one */}
           {isSpecialLeave && (
             <div className="bg-purple-50/70 p-3.5 rounded-xl border border-purple-200/60 space-y-3">
-              <div className="flex items-center gap-2 text-purple-800 font-bold text-xs">
-                <span>🔄 Weekly Recurring Special Leave</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-purple-800 font-bold text-xs">
+                  <span>🔄 Weekly Recurring Special Leave</span>
+                </div>
+                {sortedEntries.length > 0 && (
+                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md border border-purple-200">
+                    {sortedEntries.reduce((sum, e) => sum + (e.session === 'Full Day' ? 1 : 0.5), 0)} Day(s) / week
+                  </span>
+                )}
               </div>
 
               {/* Added entries list */}
               {sortedEntries.length > 0 && (
                 <div className="space-y-1.5">
-                  {sortedEntries.map(entry => (
-                    <div
-                      key={entry.day}
-                      className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-purple-200/80 shadow-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-800">{entry.day}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          entry.session === 'Full Day'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}>
-                          {entry.session === 'Full Day' ? '☀️ Full Day' : '🌗 Half Day'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeSpecialEntry(entry.day)}
-                        className="text-slate-400 hover:text-rose-500 transition-colors p-0.5 cursor-pointer"
+                  {sortedEntries.map(entry => {
+                    const isEntryHalfDay = entry.session.includes('Half Day') || entry.isHalfDay;
+                    const isMorning = entry.session.includes('Morning') || entry.halfDaySession === 'Morning';
+                    return (
+                      <div
+                        key={entry.day}
+                        className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-purple-200/80 shadow-xs"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800">{entry.day}</span>
+                          {isEntryHalfDay ? (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                              isMorning
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                            }`}>
+                              <span>{isMorning ? '🌅 Morning Half Day' : '🌆 Evening Half Day'}</span>
+                              <span className="text-[9px] opacity-75 font-normal">
+                                ({isMorning ? '08:30 AM - 12:30 PM' : '12:30 PM - 05:30 PM'})
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                              <span>☀️ Full Day</span>
+                              <span className="text-[9px] opacity-75 font-normal">(08:30 AM - 05:30 PM)</span>
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeSpecialEntry(entry.day)}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-0.5 cursor-pointer"
+                          title="Remove day"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
               {/* Add new entry row */}
               {availableDays.length > 0 && (
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-semibold text-purple-900 mb-1">Day</label>
-                    <select
-                      value={pendingDay}
-                      onChange={(e) => setPendingDay(e.target.value)}
-                      className="w-full border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
-                    >
-                      {availableDays.map(day => (
-                        <option key={day} value={day}>{day}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-semibold text-purple-900 mb-1">Duration</label>
-                    <div className="flex bg-purple-100/60 p-0.5 rounded-lg border border-purple-200/50">
-                      <button
-                        type="button"
-                        onClick={() => setPendingSession('Full Day')}
-                        className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                          pendingSession === 'Full Day'
-                            ? 'bg-white text-emerald-700 shadow-xs border border-emerald-200'
-                            : 'text-slate-500 hover:text-slate-700'
-                        }`}
+                <div className="space-y-2 bg-white/70 p-2.5 rounded-xl border border-purple-200/50">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-semibold text-purple-900 mb-1">Day</label>
+                      <select
+                        value={pendingDay}
+                        onChange={(e) => setPendingDay(e.target.value)}
+                        className="w-full border border-purple-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
                       >
-                        ☀️ Full Day
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPendingSession('Half Day')}
-                        className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                          pendingSession === 'Half Day'
-                            ? 'bg-white text-amber-700 shadow-xs border border-amber-200'
-                            : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        🌗 Half Day
-                      </button>
+                        {availableDays.map(day => (
+                          <option key={day} value={day}>{day}</option>
+                        ))}
+                      </select>
                     </div>
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-semibold text-purple-900 mb-1">Leave Duration</label>
+                      <div className="flex bg-purple-100/60 p-0.5 rounded-lg border border-purple-200/50">
+                        <button
+                          type="button"
+                          onClick={() => setPendingSession('Full Day')}
+                          className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                            pendingSession === 'Full Day'
+                              ? 'bg-white text-emerald-700 shadow-xs border border-emerald-200'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          ☀️ Full Day
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingSession('Half Day')}
+                          className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                            pendingSession === 'Half Day'
+                              ? 'bg-white text-amber-700 shadow-xs border border-amber-200'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          🌗 Half Day
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addSpecialEntry}
+                      className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0 font-bold flex items-center gap-1 text-xs"
+                      title="Add day"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add</span>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={addSpecialEntry}
-                    className="bg-purple-600 hover:bg-purple-700 text-white p-1.5 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    title="Add day"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+
+                  {/* Half Day Session Selector for Special Leave */}
+                  {pendingSession === 'Half Day' && (
+                    <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-200/60 space-y-1.5 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-amber-900">Choose Half Day Session</span>
+                        <span className="text-[9px] font-bold text-amber-700">
+                          {pendingHalfDaySession === 'Morning' ? '08:30 AM - 12:30 PM (Working Afternoon)' : '12:30 PM - 05:30 PM (Working Morning)'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setPendingHalfDaySession('Morning')}
+                          className={`py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            pendingHalfDaySession === 'Morning'
+                              ? 'bg-white text-amber-700 shadow-xs border border-amber-300'
+                              : 'text-slate-600 hover:text-slate-900 bg-white/40'
+                          }`}
+                        >
+                          🌅 Morning Session (8:30 AM - 12:30 PM)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingHalfDaySession('Evening')}
+                          className={`py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            pendingHalfDaySession === 'Evening'
+                              ? 'bg-white text-indigo-700 shadow-xs border border-indigo-300'
+                              : 'text-slate-600 hover:text-slate-900 bg-white/40'
+                          }`}
+                        >
+                          🌆 Evening Session (12:30 PM - 5:30 PM)
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

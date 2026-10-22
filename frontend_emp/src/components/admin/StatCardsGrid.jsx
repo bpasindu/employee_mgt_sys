@@ -724,9 +724,27 @@ export default function StatCardsGrid({
                         )}
 
                         {modalConfig.type === 'special_leave' && (
-                          <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold px-2.5 py-0.5 rounded-md shadow-2xs">
-                            🔁 {item.duration || 'Special Leave'}
-                          </span>
+                          <div className="flex flex-col sm:items-end gap-1">
+                            <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold px-2.5 py-0.5 rounded-md shadow-2xs">
+                              🔁 {item.days || item.duration || 'Special Leave'}
+                            </span>
+                            {item.is_half_day && (
+                              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                  item.half_day_leave_now ?? item.is_leave_now
+                                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                }`}>
+                                  {(item.half_day_leave_now ?? item.is_leave_now) ? '🏖️ Away on Leave now' : '💼 Working now'}
+                                </span>
+                                {(item.leave_time || item.session) && (
+                                  <span className="text-[10px] text-slate-500 font-medium">
+                                    {item.leave_time || item.session}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
 
                         {modalConfig.type === 'power_cut' && (
