@@ -1019,8 +1019,12 @@ const dashboardService = {
       } else {
         calculatedStatus = 'On Leave';
       }
-    } else if (user.status && user.status !== 'On Leave') {
-      calculatedStatus = user.status;
+    } else {
+      if (user.status && ['Power Cut', 'Weather Condition', 'On Leave'].includes(user.status)) {
+        supabase.from('users').update({ status: 'Working' }).eq('id', user.id).then(() => {});
+        user.status = 'Working';
+      }
+      calculatedStatus = user.status || 'Working';
     }
 
     // 5. Fetch Recent Leave Requests (Last 5)
@@ -1126,8 +1130,13 @@ const dashboardService = {
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
-      } else if (u.status && u.status !== 'On Leave') {
-        displayStatus = u.status;
+      } else {
+        if (u.status && ['Power Cut', 'Weather Condition', 'On Leave'].includes(u.status)) {
+          supabase.from('users').update({ status: 'Working' }).eq('id', u.id).then(() => {});
+          displayStatus = 'Working';
+        } else {
+          displayStatus = u.status || 'Working';
+        }
       }
 
       const formattedEmp = {
@@ -1684,10 +1693,11 @@ const adminService = {
           staleUserIdsToWorking.push(u.id);
         }
       } else {
-        if (u.status && u.status !== 'On Leave') {
-          displayStatus = u.status;
-        } else if (u.status === 'On Leave') {
+        if (u.status && ['On Leave', 'Power Cut', 'Weather Condition'].includes(u.status)) {
           staleUserIdsToWorking.push(u.id);
+          displayStatus = 'Working';
+        } else {
+          displayStatus = u.status || 'Working';
         }
       }
 
@@ -2095,8 +2105,13 @@ const adminService = {
         } else {
           displayStatus = `On Leave (${activeLeave.leave_type})`;
         }
-      } else if (u.status && u.status !== 'On Leave') {
-        displayStatus = u.status;
+      } else {
+        if (u.status && ['On Leave', 'Power Cut', 'Weather Condition'].includes(u.status)) {
+          supabase.from('users').update({ status: 'Working' }).eq('id', u.id).then(() => {});
+          displayStatus = 'Working';
+        } else {
+          displayStatus = u.status || 'Working';
+        }
       }
 
       return {

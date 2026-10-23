@@ -7,6 +7,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const { initDatabase } = require('./initDb');
 const { initBirthdayCron } = require('./services/birthdayReminder');
 const { initBackupCron } = require('./services/backupScheduler');
+const { initMidnightResetCron } = require('./services/midnightResetCron');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const authRoutes = require('./routes/authRoutes');
@@ -24,6 +25,7 @@ app.use(express.urlencoded({ limit: '60mb', extended: true }));
 initDatabase();
 initBirthdayCron();
 initBackupCron();
+initMidnightResetCron();
 
 // API Routes
 app.use('/api', dashboardRoutes);

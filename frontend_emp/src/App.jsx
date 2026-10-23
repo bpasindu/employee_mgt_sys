@@ -582,7 +582,7 @@ export default function App() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {activeTab === 'dashboard' && (() => {
-            const todayDateStr = new Date().toISOString().split('T')[0];
+            const todayDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo' }).format(new Date());
             const activeEmergencyLeave = recentLeaveRequests?.find(r => 
               (r.leave_type === 'Weather Condition' || r.leave_type === 'Power Cut') &&
               (r.status === 'Approved' || r.status === 'Pending') &&
