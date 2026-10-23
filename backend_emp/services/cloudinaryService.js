@@ -26,6 +26,7 @@ async function uploadProfilePhoto(targetUserId, photoData) {
     folder: 'pwholdings/profile_photos',
     public_id: publicId,
     overwrite: true,
+    timeout: 120000,
     transformation: [
       { width: 400, height: 400, crop: 'fill', gravity: 'face' },
       { quality: 'auto:good', fetch_format: 'auto' }
@@ -59,7 +60,8 @@ async function uploadDocument(targetUserId, documentData, filename = 'document',
     public_id: publicId,
     resource_type: 'auto',
     use_filename: true,
-    unique_filename: true
+    unique_filename: true,
+    timeout: 120000
   });
 
   return {

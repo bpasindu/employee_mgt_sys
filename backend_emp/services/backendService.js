@@ -2,6 +2,7 @@ const supabase = require('../db');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const { syncEmployeeToZoho, updateZohoEmployeeRecord } = require('./zohoService');
+const { uploadProfilePhoto, uploadDocument } = require('./cloudinaryService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pwholdings_secure_jwt_secret_key_2026';
 const ADMIN_EMAILS = [
@@ -781,39 +782,33 @@ const authService = {
             if (base64String.includes('base64,')) {
               base64String = base64String.split('base64,')[1];
             }
-            const buffer = Buffer.from(base64String, 'base64');
-            const cleanName = doc.document_name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-            const filePath = `${newUser.id}/${Date.now()}_${item.key}_${cleanName}`;
-
             let fileUrl = null;
+            let filePath = null;
             try {
-              const { data: storageData, error: storageErr } = await supabase.storage
-                .from('employee-documents')
-                .upload(filePath, buffer, {
-                  contentType: doc.file_type || 'application/pdf',
-                  upsert: true
-                });
-
-              if (!storageErr) {
-                const { data: urlData } = supabase.storage
-                  .from('employee-documents')
-                  .getPublicUrl(filePath);
-                fileUrl = urlData?.publicUrl;
-              }
+              const cloudRes = await uploadDocument(
+                newUser.id,
+                doc.document_data,
+                doc.document_name,
+                doc.file_type || 'application/pdf'
+              );
+              fileUrl = cloudRes.url;
+              filePath = cloudRes.public_id;
             } catch (sErr) {
-              console.warn('Storage upload warning for new employee document:', sErr.message);
+              console.warn('Cloudinary upload warning for new employee document:', sErr.message);
             }
 
-            await supabase
-              .from('employee_documents')
-              .insert([{
-                user_id: newUser.id,
-                document_name: doc.document_name,
-                file_url: fileUrl || doc.document_data,
-                file_path: filePath,
-                file_size: buffer.length,
-                file_type: doc.file_type || 'application/pdf'
-              }]);
+            if (fileUrl) {
+              await supabase
+                .from('employee_documents')
+                .insert([{
+                  user_id: newUser.id,
+                  document_name: doc.document_name,
+                  file_url: fileUrl,
+                  file_path: filePath,
+                  file_size: doc.file_size || 0,
+                  file_type: doc.file_type || 'application/pdf'
+                }]);
+            }
           } catch (docSaveErr) {
             console.warn(`Local employee_documents save warning for ${item.key}:`, docSaveErr.message);
           }
@@ -1221,6 +1216,7 @@ const dashboardService = {
         department: user.department,
         email: user.email,
         initials: user.initials,
+        photo_url: user.photo_url || null,
         status: calculatedStatus,
         role: user.role,
         is_half_day: hdDetails ? hdDetails.is_half_day : false,

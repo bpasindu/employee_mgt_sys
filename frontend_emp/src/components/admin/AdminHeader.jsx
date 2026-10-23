@@ -8,6 +8,7 @@ export default function AdminHeader({ title, adminUser, currentViewMode, onToggl
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [backupStatus, setBackupStatus] = useState(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
@@ -186,9 +187,14 @@ export default function AdminHeader({ title, adminUser, currentViewMode, onToggl
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="flex items-center gap-1.5 cursor-pointer pl-1 hover:opacity-85 transition-opacity"
           >
-            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border border-blue-200 shadow-xs overflow-hidden">
-              {adminUser?.photo_url ? (
-                <img src={adminUser.photo_url} alt={adminUser?.name || 'Admin'} className="w-full h-full object-cover" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border-2 border-blue-200/80 shadow-xs overflow-hidden ring-2 ring-blue-500/20">
+              {adminUser?.photo_url && !avatarError ? (
+                <img 
+                  src={adminUser.photo_url} 
+                  alt={adminUser?.name || 'Admin'} 
+                  onError={() => setAvatarError(true)} 
+                  className="w-full h-full object-cover" 
+                />
               ) : (
                 adminUser?.initials || 'AD'
               )}

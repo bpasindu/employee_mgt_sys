@@ -341,7 +341,12 @@ export default function EmployeeProfileView({ onBack, user, onSelectEmployee, on
         isOpen={isPhotoModalOpen}
         onClose={() => setIsPhotoModalOpen(false)}
         profile={profile}
-        onPhotoUpdated={(newUrl) => setProfile(prev => ({ ...prev, photo_url: newUrl }))}
+        onPhotoUpdated={(newUrl) => {
+          setProfile(prev => ({ ...prev, photo_url: newUrl }));
+          if (onParentProfileUpdated) {
+            onParentProfileUpdated({ ...(profile || {}), photo_url: newUrl });
+          }
+        }}
       />
 
       {/* Delete Employee Confirmation Modal */}

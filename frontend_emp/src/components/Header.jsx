@@ -17,6 +17,7 @@ export default function Header({
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const searchRef = useRef(null);
   const profileMenuRef = useRef(null);
@@ -34,6 +35,11 @@ export default function Header({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reset avatarError when user changes or photo_url updates
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.photo_url]);
 
   // Search employee handler
   useEffect(() => {
@@ -206,18 +212,23 @@ export default function Header({
           )}
         </div>
 
-        {/* Profile Initials Dropdown */}
+        {/* Profile Avatar Dropdown */}
         <div className="relative" ref={profileMenuRef}>
           <div 
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
             className="flex items-center gap-1.5 cursor-pointer pl-1 sm:pl-2 hover:opacity-85 transition-opacity"
             title="Account Options"
           >
-            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border border-blue-200 shadow-xs overflow-hidden">
-              {user?.photo_url ? (
-                <img src={user.photo_url} alt={user.name} className="w-full h-full object-cover" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border-2 border-blue-200/80 shadow-xs overflow-hidden ring-2 ring-blue-500/20">
+              {user?.photo_url && !avatarError ? (
+                <img 
+                  src={user.photo_url} 
+                  alt={user?.name || 'User'} 
+                  onError={() => setAvatarError(true)} 
+                  className="w-full h-full object-cover" 
+                />
               ) : (
-                user?.initials || 'KP'
+                user?.initials || (user?.name ? user.name.slice(0, 2).toUpperCase() : 'EP')
               )}
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
@@ -225,13 +236,22 @@ export default function Header({
 
           {/* Top-Right Profile Dropdown Card */}
           {isProfileMenuOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-2 animate-in fade-in duration-150">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 mb-2">
-                <h4 className="text-xs font-bold text-slate-900 truncate">{user?.name || 'Employee'}</h4>
-                <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{user?.email || user?.department || 'Employee'}</p>
-                <span className="inline-block mt-1 text-[9px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
-                  {user?.role || 'Employee'}
-                </span>
+            <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-2 animate-in fade-in duration-150">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 mb-2 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center border border-blue-200 shrink-0 overflow-hidden shadow-2xs">
+                  {user?.photo_url && !avatarError ? (
+                    <img src={user.photo_url} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    user?.initials || (user?.name ? user.name.slice(0, 2).toUpperCase() : 'EP')
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xs font-bold text-slate-900 truncate">{user?.name || 'Employee'}</h4>
+                  <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{user?.email || user?.department || 'Employee'}</p>
+                  <span className="inline-block mt-1 text-[9px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
+                    {user?.role || 'Employee'}
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-1">
