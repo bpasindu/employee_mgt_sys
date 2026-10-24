@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CalendarPlus, Plus, Trash2, Zap, Laptop, Smartphone, Clock, AlertTriangle, ArrowRight, CloudRain, CloudLightning } from 'lucide-react';
 
-const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
 const getTodayDateStr = () => {
   const now = new Date();
@@ -67,13 +67,50 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
   const isPowerCut = leaveType === 'Power Cut';
   const isWeatherCondition = leaveType === 'Weather Condition';
 
-  const calculateDays = (sDate, eDate) => {
-    if (!sDate || !eDate) return 1;
-    const s = new Date(sDate);
-    const e = new Date(eDate);
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
-    const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    return diff > 0 ? diff : 1;
+  // Calculate business days excluding Saturdays and Sundays (Company Holidays)
+  const calculateBusinessDays = (sDate, eDate) => {
+    if (!sDate || !eDate) return 0;
+    const s = new Date(sDate + 'T00:00:00');
+    const e = new Date(eDate + 'T00:00:00');
+    if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+    let count = 0;
+    const cur = new Date(s);
+    while (cur <= e) {
+      const day = cur.getDay(); // 0 is Sunday, 6 is Saturday
+      if (day !== 0 && day !== 6) {
+        count++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  };
+
+  // Calculate special leave days between startDate and endDate based on recurring weekdays, excluding Sat & Sun
+  const calculateSpecialLeaveDays = (sDate, eDate, entries) => {
+    if (!sDate || !eDate || !entries || entries.length === 0) return 0;
+    const s = new Date(sDate + 'T00:00:00');
+    const e = new Date(eDate + 'T00:00:00');
+    if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+
+    const dayMap = {};
+    entries.forEach(item => {
+      dayMap[item.day.toLowerCase()] = (item.session && item.session.includes('Half Day')) || item.isHalfDay ? 0.5 : 1.0;
+    });
+
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    let total = 0;
+    const cur = new Date(s);
+    while (cur <= e) {
+      const dow = cur.getDay();
+      if (dow !== 0 && dow !== 6) { // skip weekends
+        const name = dayNames[dow];
+        if (dayMap[name]) {
+          total += dayMap[name];
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return total;
   };
 
   const calculateShortLeaveDuration = (sTime, eTime) => {
@@ -97,17 +134,21 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     }
     setStartDate(val);
     setErrorMsg('');
-    if (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) {
+    if (isHalfDay || isShortLeave || isPowerCut || isWeatherCondition) {
       setEndDate(val);
       if (isShortLeave) {
         setDaysCount(shortLeaveHours > 0 ? Math.min(0.5, +(shortLeaveHours / 9).toFixed(3)) : 0.25);
       } else {
-        setDaysCount(isHalfDay || isSpecialLeave ? 0.5 : 1);
+        setDaysCount(isHalfDay ? 0.5 : 1);
       }
+    } else if (isSpecialLeave) {
+      const targetEnd = endDate && endDate >= val ? endDate : val;
+      if (!endDate || endDate < val) setEndDate(val);
+      setDaysCount(calculateSpecialLeaveDays(val, targetEnd, specialEntries));
     } else {
       const targetEnd = endDate && endDate >= val ? endDate : val;
       if (!endDate || endDate < val) setEndDate(val);
-      setDaysCount(calculateDays(val, targetEnd));
+      setDaysCount(calculateBusinessDays(val, targetEnd));
     }
   };
 
@@ -119,16 +160,26 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     setEndDate(val);
     setErrorMsg('');
     if (startDate) {
-      setDaysCount(calculateDays(startDate, val));
+      if (isSpecialLeave) {
+        setDaysCount(calculateSpecialLeaveDays(startDate, val, specialEntries));
+      } else {
+        setDaysCount(calculateBusinessDays(startDate, val));
+      }
     }
   };
 
   const handleLeaveTypeChange = (newType) => {
     setLeaveType(newType);
     setErrorMsg('');
-    if (newType === 'Half Day' || newType === 'Special Leave') {
+    if (newType === 'Half Day') {
       setDaysCount(0.5);
       if (startDate) setEndDate(startDate);
+    } else if (newType === 'Special Leave') {
+      if (startDate && endDate) {
+        setDaysCount(calculateSpecialLeaveDays(startDate, endDate, specialEntries));
+      } else {
+        setDaysCount(0);
+      }
     } else if (newType === 'Short Leave') {
       const hrs = calculateShortLeaveDuration(startTime, endTime);
       setDaysCount(hrs > 0 ? Math.min(0.5, +(hrs / 9).toFixed(3)) : 0.25);
@@ -144,7 +195,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       }
     } else {
       if (startDate && endDate) {
-        setDaysCount(calculateDays(startDate, endDate));
+        setDaysCount(calculateBusinessDays(startDate, endDate));
       } else {
         setDaysCount(1);
       }
@@ -180,20 +231,28 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     const sessionLabel = pendingSession === 'Full Day' 
       ? 'Full Day' 
       : `Half Day (${pendingHalfDaySession})`;
-    setSpecialEntries(prev => [...prev, { 
+    const updatedEntries = [...specialEntries, { 
       day: pendingDay, 
       session: sessionLabel,
       isHalfDay: pendingSession === 'Half Day',
       halfDaySession: pendingSession === 'Half Day' ? pendingHalfDaySession : null 
-    }]);
+    }];
+    setSpecialEntries(updatedEntries);
+    if (startDate && endDate) {
+      setDaysCount(calculateSpecialLeaveDays(startDate, endDate, updatedEntries));
+    }
     setErrorMsg('');
-    const usedDays = [...specialEntries.map(e => e.day), pendingDay];
+    const usedDays = updatedEntries.map(e => e.day);
     const nextDay = ALL_DAYS.find(d => !usedDays.includes(d));
     if (nextDay) setPendingDay(nextDay);
   };
 
   const removeSpecialEntry = (day) => {
-    setSpecialEntries(prev => prev.filter(e => e.day !== day));
+    const updatedEntries = specialEntries.filter(e => e.day !== day);
+    setSpecialEntries(updatedEntries);
+    if (startDate && endDate) {
+      setDaysCount(calculateSpecialLeaveDays(startDate, endDate, updatedEntries));
+    }
     setErrorMsg('');
   };
 
@@ -237,9 +296,19 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       }
     }
 
-    if (isSpecialLeave && specialEntries.length === 0) {
-      setErrorMsg('Please add at least one day for Special Leave.');
-      return;
+    if (isSpecialLeave) {
+      if (specialEntries.length === 0) {
+        setErrorMsg('Please add at least one recurring day for Special Leave.');
+        return;
+      }
+      if (!startDate || !endDate) {
+        setErrorMsg('Please specify both Effective Start Date and Effective End Date for Special Leave.');
+        return;
+      }
+      if (startDate > endDate) {
+        setErrorMsg('Effective End Date cannot be earlier than Effective Start Date.');
+        return;
+      }
     }
 
     // Check Leave Quota Balance (Power Cut & Weather Condition do not deduct from regular leave quota)
@@ -257,7 +326,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       }
     }
 
-    const finalEndDate = (isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) ? startDate : endDate;
+    const finalEndDate = (isHalfDay || isShortLeave || isPowerCut || isWeatherCondition) ? startDate : endDate;
     if (!startDate || !finalEndDate) {
       setErrorMsg('Please select a valid date for your leave.');
       return;
@@ -270,9 +339,9 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
     setIsSubmitting(true);
     setErrorMsg('');
     try {
-      const specialDaysTotal = sortedEntries.reduce((sum, e) => sum + (e.session === 'Full Day' ? 1 : 0.5), 0);
+      const specialDaysTotal = calculateSpecialLeaveDays(startDate, finalEndDate, sortedEntries);
       const finalDaysCount = isSpecialLeave 
-        ? specialDaysTotal 
+        ? (specialDaysTotal > 0 ? specialDaysTotal : 0.5)
         : isShortLeave 
         ? +(shortLeaveHours / 9).toFixed(3)
         : (isHalfDay ? 0.5 : (Number(daysCount) || 1));
@@ -288,7 +357,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
         finalReason = `[Short Leave: ${startTime} - ${endTime} (${shortLeaveHours.toFixed(1)} hrs)] ${reason}`.trim();
       } else if (isSpecialLeave) {
         const entryDesc = sortedEntries.map(e => `${e.day} (${e.session})`).join(', ');
-        finalReason = `[Special Leave - ${entryDesc}] ${reason}`.trim();
+        finalReason = `[Special Leave (${startDate} to ${finalEndDate}) - ${entryDesc}] ${reason}`.trim();
       } else if (isPowerCut) {
         finalReason = `[Power Cut - Laptop: ${laptopBattery}%, Phone: ${phoneBattery}%] ${reason}`.trim();
       } else if (isWeatherCondition) {
@@ -315,7 +384,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitLeave, user, 
       
       let leaveDurationStr = '';
       if (isSpecialLeave) {
-        leaveDurationStr = sortedEntries.map(e => `${e.day} (${e.session})`).join(', ') + ` starting ${startDate}`;
+        leaveDurationStr = `${startDate} to ${finalEndDate} (Every ${sortedEntries.map(e => `${e.day} [${e.session}]`).join(', ')}) · Total: ${finalDaysCount} ${finalDaysCount === 1 ? 'day' : 'days'}`;
       } else if (isShortLeave) {
         leaveDurationStr = `${startDate} (${startTime} to ${endTime} · ${shortLeaveHours.toFixed(1)} hrs)`;
       } else if (isPowerCut) {
@@ -834,10 +903,10 @@ Submitted via P W Holdings Employee Management System`;
           )}
 
           {/* Date Fields */}
-          {(isHalfDay || isShortLeave || isSpecialLeave || isPowerCut || isWeatherCondition) ? (
+          {(isHalfDay || isShortLeave || isPowerCut || isWeatherCondition) ? (
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {isSpecialLeave ? 'Effective Start Date' : 'Date'}
+                Date
               </label>
               <input
                 type="date"
@@ -847,6 +916,53 @@ Submitted via P W Holdings Employee Management System`;
                 onChange={(e) => handleStartDateChange(e.target.value)}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
               />
+            </div>
+          ) : isSpecialLeave ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Effective Start Date</label>
+                  <input
+                    type="date"
+                    required
+                    min={todayDateStr}
+                    value={startDate}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Effective End Date</label>
+                  <input
+                    type="date"
+                    required
+                    min={startDate && startDate >= todayDateStr ? startDate : todayDateStr}
+                    value={endDate}
+                    onChange={(e) => handleEndDateChange(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Total Special Leave Days</label>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    🏖️ Saturdays & Sundays Excluded
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={daysCount}
+                  onChange={(e) => setDaysCount(e.target.value)}
+                  className="w-full border border-purple-200 bg-purple-50/50 rounded-xl px-3 py-2 text-sm text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-bold"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Calculated for all scheduled weekly recurring days within the selected period (excludes weekend company holidays).
+                </p>
+              </div>
             </div>
           ) : (
             <>
@@ -876,7 +992,12 @@ Submitted via P W Holdings Employee Management System`;
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Days (Auto-calculated)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Total Days (Auto-calculated)</label>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    🏖️ Saturdays & Sundays Excluded
+                  </span>
+                </div>
                 <input
                   type="number"
                   step="0.5"
@@ -885,6 +1006,9 @@ Submitted via P W Holdings Employee Management System`;
                   onChange={(e) => setDaysCount(e.target.value)}
                   className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold"
                 />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Working days only. Weekend holidays (Saturday & Sunday) are automatically excluded.
+                </p>
               </div>
             </>
           )}

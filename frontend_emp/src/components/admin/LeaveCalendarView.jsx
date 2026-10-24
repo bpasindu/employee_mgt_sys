@@ -74,9 +74,52 @@ export default function LeaveCalendarView() {
 
   // Check if an employee is on leave on a given date string YYYY-MM-DD
   const getLeavesForDate = (dateStr) => {
-    if (!Array.isArray(leaveEvents)) return [];
+    if (!Array.isArray(leaveEvents) || !dateStr) return [];
+
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    if (isNaN(dateObj.getTime())) return [];
+
+    const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
+
+    // Saturdays and Sundays are company holidays - no employees have leave scheduled on weekends
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return [];
+    }
+
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const currentWeekday = dayNames[dayOfWeek];
+
     return leaveEvents.filter(event => {
-      return dateStr >= event.start_date && dateStr <= event.end_date;
+      const sDate = event.start_date ? event.start_date.split('T')[0] : '';
+      const eDate = event.end_date ? event.end_date.split('T')[0] : sDate;
+
+      // Must fall within the start and end date boundaries
+      if (dateStr < sDate || (eDate && dateStr > eDate)) {
+        return false;
+      }
+
+      // If Special Leave or recurring leave with specific weekdays
+      const isSpecial = event.leave_type === 'Special Leave';
+      const hasDayOfWeek = Boolean(event.day_of_week);
+
+      if (isSpecial || hasDayOfWeek) {
+        if (!event.day_of_week) return false;
+
+        // Entries can be "Monday:Full Day, Wednesday:Half Day (Morning)" or "Monday, Wednesday"
+        const entries = event.day_of_week.split(',').map(part => {
+          const colonIdx = part.indexOf(':');
+          const d = colonIdx !== -1 ? part.slice(0, colonIdx) : part;
+          return d.trim().toLowerCase();
+        }).filter(Boolean);
+
+        // Check if the date's weekday matches any of the approved recurring days
+        const matchesDay = entries.some(d => d === currentWeekday || currentWeekday.startsWith(d));
+        if (!matchesDay) {
+          return false;
+        }
+      }
+
+      return true;
     });
   };
 
@@ -322,9 +365,14 @@ export default function LeaveCalendarView() {
                     <div className="pt-2 border-t border-slate-200/60 grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Duration</span>
-                        <span className="font-semibold text-slate-700">
+                        <span className="font-semibold text-slate-700 block">
                           {leave.start_date} → {leave.end_date} ({leave.days_count} {leave.days_count === 1 ? 'day' : 'days'})
                         </span>
+                        {leave.leave_type === 'Special Leave' && leave.day_of_week && (
+                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 mt-1 inline-block">
+                            🔄 Every {leave.day_of_week.split(',').map(s => s.trim()).join(', ')}
+                          </span>
+                        )}
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reason / Session</span>

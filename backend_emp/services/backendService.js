@@ -108,6 +108,53 @@ function formatTime12(timeStr) {
   return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
+// Helper: Calculate next upcoming leave date for recurring or ongoing leaves
+function getNextLeaveDate(leave, todayStr) {
+  const isSpecial = leave.leave_type === 'Special Leave' || leave.is_recurring;
+  const sDate = leave.start_date ? leave.start_date.split('T')[0] : '';
+  const eDate = leave.end_date ? leave.end_date.split('T')[0] : sDate;
+
+  if (isSpecial && leave.day_of_week) {
+    const days = leave.day_of_week.split(',').map(d => d.split(':')[0].trim().toLowerCase());
+    const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+    // Only consider business weekdays for leaves
+    const targetDows = days
+      .map(d => dayMap[d])
+      .filter(d => d !== undefined && d !== 0 && d !== 6);
+
+    if (targetDows.length > 0) {
+      const cur = new Date(todayStr + 'T00:00:00');
+      // Look from tomorrow onwards (since today is not upcoming, today is today)
+      cur.setDate(cur.getDate() + 1);
+      const maxLimit = eDate && eDate > todayStr 
+        ? new Date(eDate + 'T00:00:00') 
+        : new Date(cur.getTime() + 60 * 86400000);
+
+      while (cur <= maxLimit) {
+        if (targetDows.includes(cur.getDay())) {
+          const y = cur.getFullYear();
+          const m = String(cur.getMonth() + 1).padStart(2, '0');
+          const d = String(cur.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+  }
+
+  if (sDate > todayStr) return sDate;
+  if (eDate > todayStr) {
+    const cur = new Date(todayStr + 'T00:00:00');
+    cur.setDate(cur.getDate() + 1);
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, '0');
+    const d = String(cur.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return sDate || todayStr;
+}
+
+
 // Helper: Determine Special Leave details for a specific day (default: today in Colombo timezone)
 function getSpecialLeaveDetails(activeLeave, targetDateStr = null) {
   if (!activeLeave || activeLeave.leave_type !== 'Special Leave') {
@@ -836,6 +883,56 @@ const authService = {
   }
 };
 
+// Helper: Calculate business days excluding Saturdays and Sundays
+function calculateBackendBusinessDays(sDateStr, eDateStr) {
+  if (!sDateStr || !eDateStr) return 0;
+  const s = new Date(sDateStr + 'T00:00:00');
+  const e = new Date(eDateStr + 'T00:00:00');
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const day = cur.getDay(); // 0 is Sun, 6 is Sat
+    if (day !== 0 && day !== 6) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+// Helper: Calculate special leave days recurring between start and end date excluding weekends
+function calculateBackendSpecialLeaveDays(sDateStr, eDateStr, dayOfWeekStr) {
+  if (!sDateStr || !eDateStr || !dayOfWeekStr) return 0;
+  const s = new Date(sDateStr + 'T00:00:00');
+  const e = new Date(eDateStr + 'T00:00:00');
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+
+  const dayMap = {};
+  const parts = String(dayOfWeekStr).split(',');
+  parts.forEach(p => {
+    const [dName, session] = p.split(':').map(x => (x || '').trim());
+    if (dName) {
+      dayMap[dName.toLowerCase()] = (session && session.toLowerCase().includes('half day')) ? 0.5 : 1.0;
+    }
+  });
+
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  let total = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) { // skip weekends
+      const name = dayNames[dow];
+      if (dayMap[name]) {
+        total += dayMap[name];
+      }
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return total;
+}
+
 // =============================================================
 // DASHBOARD SERVICE
 // =============================================================
@@ -1386,8 +1483,20 @@ const dashboardService = {
       throw new Error('Leave requests cannot be submitted for past dates. Please select today or a future date.');
     }
 
-    const days = Number(days_count) || 1;
     const isSpecial = leave_type === 'Special Leave';
+    const isShortLeave = leave_type === 'Short Leave';
+    const isHalfDay = leave_type === 'Half Day';
+    const isExemptTypes = ['Power Cut', 'Weather Condition'].includes(leave_type);
+
+    let days = Number(days_count) || 1;
+    if (isSpecial && day_of_week) {
+      const calcSpecial = calculateBackendSpecialLeaveDays(sDate, eDate, day_of_week);
+      if (calcSpecial > 0) days = calcSpecial;
+    } else if (!isShortLeave && !isHalfDay && !isExemptTypes) {
+      const bDays = calculateBackendBusinessDays(sDate, eDate);
+      if (bDays > 0) days = bDays;
+    }
+
     const finalRecurring = isSpecial ? true : (is_recurring ? true : false);
 
     const { error } = await supabase
@@ -1609,7 +1718,7 @@ const adminService = {
         users (id, name, email, department, initials, photo_url)
       `)
       .eq('status', 'Approved')
-      .gt('start_date', todayStr)
+      .or(`start_date.gt.${todayStr},end_date.gt.${todayStr},is_recurring.eq.true`)
       .order('start_date', { ascending: true });
     const { data: allLeavesRaw } = await supabase
       .from('leave_requests')
@@ -1918,37 +2027,64 @@ const adminService = {
       };
     });
 
-    const upcomingFormatted = (upcomingRequests || []).map(r => ({
-      id: r.id,
-      user_id: r.user_id,
-      employee_name: r.users?.name || 'Employee',
-      initials: r.users?.initials || (r.users?.name ? r.users.name.slice(0, 2).toUpperCase() : 'EM'),
-      department: r.users?.department || 'General',
-      email: r.users?.email || '',
-      leave_type: r.leave_type,
-      from_date: r.start_date ? r.start_date.split('T')[0] : '',
-      to_date: r.end_date ? r.end_date.split('T')[0] : '',
-      days_count: r.days_count,
-      day_of_week: r.day_of_week,
-      start_time: r.start_time,
-      end_time: r.end_time,
-      special_session: r.special_session,
-      is_recurring: r.is_recurring,
-      reason: r.reason,
-      status: r.status,
-      applied_date: r.created_at ? r.created_at.split('T')[0] : '',
-      duration: r.leave_type === 'Special Leave' && r.day_of_week
-        ? (r.start_date
-            ? `${formatSpecialDays(r.day_of_week)} (${r.start_date.split('T')[0]}${r.end_date && r.end_date.split('T')[0] !== r.start_date.split('T')[0] ? ` to ${r.end_date.split('T')[0]}` : ''})`
-            : formatSpecialDays(r.day_of_week))
-        : (r.leave_type === 'Short Leave' && r.start_time && r.end_time)
-          ? `${formatTime12(r.start_time)} - ${formatTime12(r.end_time)}${r.start_date ? ` (${r.start_date.split('T')[0]})` : ''}`
-          : (r.leave_type === 'Half Day' && r.start_time && r.end_time)
-            ? `${r.start_time} - ${r.end_time} (${r.days_count} day)${r.start_date ? ` (${r.start_date.split('T')[0]})` : ''}`
-            : (r.start_date && r.end_date && r.start_date.split('T')[0] === r.end_date.split('T')[0]
-                ? `${r.days_count || 1} day (${r.start_date.split('T')[0]})`
-                : `${r.days_count} days (${r.start_date ? r.start_date.split('T')[0] : ''} to ${r.end_date ? r.end_date.split('T')[0] : ''})`)
-    }));
+    const filteredUpcoming = (upcomingRequests || []).filter(r => {
+      const sDate = r.start_date ? r.start_date.split('T')[0] : '';
+      const eDate = r.end_date ? r.end_date.split('T')[0] : sDate;
+      const isRecurring = r.is_recurring === true || r.is_recurring === 1 || r.leave_type === 'Special Leave';
+
+      // 1. Future start date
+      if (sDate > todayStr) return true;
+
+      // 2. Multi-day leave extending into future
+      if (eDate > todayStr) return true;
+
+      // 3. Recurring leave that is still active
+      if (isRecurring) {
+        if (eDate && eDate < todayStr && eDate !== sDate) {
+          return false;
+        }
+        return true;
+      }
+
+      return false;
+    });
+
+    const upcomingFormatted = (filteredUpcoming || []).map(r => {
+      const nextDate = getNextLeaveDate(r, todayStr);
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        employee_name: r.users?.name || 'Employee',
+        initials: r.users?.initials || (r.users?.name ? r.users.name.slice(0, 2).toUpperCase() : 'EM'),
+        photo_url: r.users?.photo_url || null,
+        department: r.users?.department || 'General',
+        email: r.users?.email || '',
+        leave_type: r.leave_type,
+        from_date: r.start_date ? r.start_date.split('T')[0] : '',
+        to_date: r.end_date ? r.end_date.split('T')[0] : '',
+        days_count: r.days_count,
+        day_of_week: r.day_of_week,
+        start_time: r.start_time,
+        end_time: r.end_time,
+        special_session: r.special_session,
+        is_recurring: r.is_recurring,
+        reason: r.reason,
+        status: r.status,
+        applied_date: r.created_at ? r.created_at.split('T')[0] : '',
+        next_leave_date: nextDate,
+        duration: r.leave_type === 'Special Leave' && r.day_of_week
+          ? (r.start_date
+              ? `${formatSpecialDays(r.day_of_week)} (${r.start_date.split('T')[0]}${r.end_date && r.end_date.split('T')[0] !== r.start_date.split('T')[0] ? ` to ${r.end_date.split('T')[0]}` : ''})`
+              : formatSpecialDays(r.day_of_week))
+          : (r.leave_type === 'Short Leave' && r.start_time && r.end_time)
+            ? `${formatTime12(r.start_time)} - ${formatTime12(r.end_time)}${r.start_date ? ` (${r.start_date.split('T')[0]})` : ''}`
+            : (r.leave_type === 'Half Day' && r.start_time && r.end_time)
+              ? `${r.start_time} - ${r.end_time} (${r.days_count} day)${r.start_date ? ` (${r.start_date.split('T')[0]})` : ''}`
+              : (r.start_date && r.end_date && r.start_date.split('T')[0] === r.end_date.split('T')[0]
+                  ? `${r.days_count || 1} day (${r.start_date.split('T')[0]})`
+                  : `${r.days_count} days (${r.start_date ? r.start_date.split('T')[0] : ''} to ${r.end_date ? r.end_date.split('T')[0] : ''})`)
+      };
+    }).sort((a, b) => (a.next_leave_date || a.from_date).localeCompare(b.next_leave_date || b.from_date));
 
     const allLeavesFormatted = (allLeavesRaw || []).map(r => ({
       id: r.id,
