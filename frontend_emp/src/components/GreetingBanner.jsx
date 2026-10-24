@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PartyPopper, Cake, Sparkles } from 'lucide-react';
 
 function getGreeting() {
@@ -29,7 +29,12 @@ function checkIsBirthdayToday(dobStr) {
 }
 
 export default function GreetingBanner({ user }) {
+  const [imgError, setImgError] = useState(false);
   const { text: greetingText, emoji: greetingEmoji } = getGreeting();
+
+  useEffect(() => {
+    setImgError(false);
+  }, [user?.photo_url]);
 
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
@@ -61,13 +66,27 @@ export default function GreetingBanner({ user }) {
             <span className="text-xs text-amber-100/90 font-medium hidden sm:inline">{formattedDate}</span>
           </div>
 
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1 flex flex-wrap items-center gap-2 tracking-tight">
-            <span>Happy Birthday, {firstName}!</span>
-            <span className="inline-block animate-bounce text-2xl">🎂</span>
-            <span className="inline-block animate-pulse text-2xl">🎁</span>
-          </h2>
+          <div className="flex items-center gap-3.5 sm:gap-4 mt-2">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/20 text-white font-black text-sm sm:text-base flex items-center justify-center border-2 border-amber-300/60 shrink-0 overflow-hidden shadow-lg ring-2 ring-amber-400/40">
+              {user?.photo_url && !imgError ? (
+                <img 
+                  src={user.photo_url} 
+                  alt={user?.name || 'Profile'} 
+                  onError={() => setImgError(true)} 
+                  className="w-full h-full object-cover" 
+                />
+              ) : (
+                user?.initials || (user?.name ? user.name.slice(0, 2).toUpperCase() : 'EP')
+              )}
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white flex flex-wrap items-center gap-2 tracking-tight">
+              <span>Happy Birthday, {firstName}!</span>
+              <span className="inline-block animate-bounce text-2xl">🎂</span>
+              <span className="inline-block animate-pulse text-2xl">🎁</span>
+            </h2>
+          </div>
 
-          <p className="text-xs sm:text-sm text-amber-100/95 font-medium mt-2 leading-relaxed max-w-2xl">
+          <p className="text-xs sm:text-sm text-amber-100/95 font-medium mt-3 leading-relaxed max-w-2xl">
             Wishing you a wonderful birthday filled with joy, laughter, and great achievements! May this year bring you continued success and happiness! Have a fantastic day from all of us at P W Holdings! ✨🎈
           </p>
         </div>
@@ -82,17 +101,27 @@ export default function GreetingBanner({ user }) {
         <p className="text-xs font-medium text-blue-200/90">{formattedDate}</p>
 
         {/* Main Greeting with Profile Photo */}
-        <div className="flex items-center gap-3.5 mt-2">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-400/20 text-white font-black text-sm sm:text-base flex items-center justify-center border-2 border-white/30 shrink-0 overflow-hidden shadow-xs">
-            {user?.photo_url ? (
-              <img src={user.photo_url} alt={user?.name || 'Profile'} className="w-full h-full object-cover" />
+        <div className="flex items-center gap-3.5 sm:gap-4 mt-2">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-400/20 text-white font-black text-sm sm:text-base flex items-center justify-center border-2 border-white/40 shrink-0 overflow-hidden shadow-md ring-2 ring-blue-300/30">
+            {user?.photo_url && !imgError ? (
+              <img 
+                src={user.photo_url} 
+                alt={user?.name || 'Profile'} 
+                onError={() => setImgError(true)} 
+                className="w-full h-full object-cover" 
+              />
             ) : (
               user?.initials || (user?.name ? user.name.slice(0, 2).toUpperCase() : 'EP')
             )}
           </div>
-          <h2 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <span>{greetingText}, {firstName}</span> <span className="inline-block animate-bounce">{greetingEmoji}</span>
-          </h2>
+          <div>
+            <h2 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
+              <span>{greetingText}, {firstName}</span> <span className="inline-block animate-bounce">{greetingEmoji}</span>
+            </h2>
+            {user?.designation && (
+              <p className="text-xs text-blue-200/80 font-medium mt-0.5">{user.designation}</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

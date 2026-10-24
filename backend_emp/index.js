@@ -7,11 +7,13 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const { initDatabase } = require('./initDb');
 const { initBirthdayCron } = require('./services/birthdayReminder');
 const { initBackupCron } = require('./services/backupScheduler');
+const { initMidnightResetCron } = require('./services/midnightResetCron');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const authRoutes = require('./routes/authRoutes');
 const zohoRoutes = require('./routes/zohoRoutes');
 const profileRoutes = require('./routes/profileRoutes');
+const projectRoutes = require('./routes/projectRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,18 +26,20 @@ app.use(express.urlencoded({ limit: '60mb', extended: true }));
 initDatabase();
 initBirthdayCron();
 initBackupCron();
-
-// API Routes
-app.use('/api', dashboardRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api', zohoRoutes);
-app.use('/api', profileRoutes);
+initMidnightResetCron();
 
 // Basic health check route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'API is running' });
 });
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api', dashboardRoutes);
+app.use('/api', zohoRoutes);
+app.use('/api', profileRoutes);
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, () => {

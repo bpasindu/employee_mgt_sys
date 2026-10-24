@@ -34,6 +34,9 @@ import AdminClientAnalyticsView from './components/admin/AdminClientAnalyticsVie
 import LeaveCalendarView from './components/admin/LeaveCalendarView';
 import EmployeeRegistrationPage from './components/EmployeeRegistrationPage';
 
+// Project Management Component
+import ProjectManagementView from './components/projects/ProjectManagementView';
+
 export default function App() {
   // Navigation View: 'login' | 'register' | 'admin' | 'employee'
   const [currentView, setCurrentView] = useState(() => {
@@ -362,6 +365,7 @@ export default function App() {
 
   const adminTitles = {
     'admin-dashboard': 'Dashboard',
+    'projects': 'Projects & Tasks',
     'all-employees': 'All Employees',
     'work-activity': 'Work Activity',
     'client-analytics': 'Client Analytics',
@@ -373,6 +377,7 @@ export default function App() {
 
   const employeeTitles = {
     'dashboard': 'Dashboard',
+    'projects': 'Projects & Tasks',
     'work-history': "Today's Work Log",
     'profile': 'Employee Profile',
     'leave-history': 'My Leave History',
@@ -485,6 +490,14 @@ export default function App() {
               </div>
             )}
 
+            {activeTab === 'projects' && (
+              <ProjectManagementView 
+                currentUser={currentUser || adminUser} 
+                allEmployees={allEmployees} 
+                isEmployeeView={false} 
+              />
+            )}
+
             {activeTab === 'all-employees' && <AdminAllEmployeesView employees={allEmployees} onSelectEmployee={handleSelectEmployee} />}
 
             {activeTab === 'admin-leave-requests' && (
@@ -582,7 +595,7 @@ export default function App() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {activeTab === 'dashboard' && (() => {
-            const todayDateStr = new Date().toISOString().split('T')[0];
+            const todayDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo' }).format(new Date());
             const activeEmergencyLeave = recentLeaveRequests?.find(r => 
               (r.leave_type === 'Weather Condition' || r.leave_type === 'Power Cut') &&
               (r.status === 'Approved' || r.status === 'Pending') &&
@@ -658,6 +671,14 @@ export default function App() {
               </div>
             );
           })()}
+
+          {activeTab === 'projects' && (
+            <ProjectManagementView 
+              currentUser={currentUser || user} 
+              allEmployees={allEmployees} 
+              isEmployeeView={true} 
+            />
+          )}
 
           {activeTab === 'work-history' && <WorkHistoryView userId={currentUser?.id} />}
 

@@ -4,6 +4,7 @@ const zohoService = require('../services/zohoService');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const supabase = require('../db');
 const { profileService } = require('../services/backendService');
+const { uploadDocument } = require('../services/cloudinaryService');
 
 router.use(authenticateToken);
 
@@ -153,31 +154,20 @@ router.post('/api/zoho/employee/document/upload', async (req, res) => {
       zohoError = zErr.message;
     }
 
-    // 2. Also save to Supabase Storage & employee_documents table for local preview and redundancy
-    const cleanName = document_name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const filePath = `${targetUserId || 'emp'}/${Date.now()}_${doc_type}_${cleanName}`;
-
+    // 2. Also save to Cloudinary CDN for lightweight link reference in Supabase
     let localFileUrl = null;
+    let filePath = null;
     try {
-      const { data: storageData, error: storageErr } = await supabase.storage
-        .from('employee-documents')
-        .upload(filePath, buffer, {
-          contentType: file_type || 'application/pdf',
-          upsert: true
-        });
-
-      if (!storageErr) {
-        const { data: urlData } = supabase.storage
-          .from('employee-documents')
-          .getPublicUrl(filePath);
-        localFileUrl = urlData?.publicUrl;
-      }
+      const cloudRes = await uploadDocument(
+        targetUserId || 'general',
+        document_data,
+        document_name,
+        file_type || 'application/pdf'
+      );
+      localFileUrl = cloudRes.url;
+      filePath = cloudRes.public_id;
     } catch (storEx) {
-      console.warn('Local storage upload warning:', storEx.message);
-    }
-
-    if (!localFileUrl) {
-      localFileUrl = document_data; // fallback base64
+      console.warn('Cloudinary upload warning in zohoRoutes:', storEx.message);
     }
 
     const docLabels = {

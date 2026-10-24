@@ -562,7 +562,7 @@ export default function StatCardsGrid({
           onClick={handleCloseModal}
         >
           <div 
-            className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 relative animate-in zoom-in-95 duration-150 overflow-hidden"
+            className={`bg-white rounded-3xl ${modalConfig.type === 'upcoming' ? 'max-w-6xl' : 'max-w-2xl'} w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-200 relative animate-in zoom-in-95 duration-150 overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -610,7 +610,7 @@ export default function StatCardsGrid({
             </div>
 
             {/* Modal List Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-3 divide-y divide-slate-50">
+            <div className={`flex-1 overflow-y-auto ${modalConfig.type === 'upcoming' ? 'p-0' : 'p-6 space-y-3 divide-y divide-slate-50'}`}>
               {modalConfig.items.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
                   <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -618,6 +618,179 @@ export default function StatCardsGrid({
                   <p className="text-xs text-slate-400 mt-0.5">
                     {modalSearch ? 'Try a different search query.' : 'Currently no entries in this category today.'}
                   </p>
+                </div>
+              ) : modalConfig.type === 'upcoming' ? (
+                /* Dedicated Upcoming Approved Leaves Table Layout */
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[760px]">
+                    <thead>
+                      <tr className="bg-slate-50/90 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                        <th className="py-3.5 pl-6 pr-3 w-16 text-center">Photo</th>
+                        <th className="py-3.5 px-3 min-w-[170px]">Employee & Dept</th>
+                        <th className="py-3.5 px-3 min-w-[200px] max-w-[280px]">Reason</th>
+                        <th className="py-3.5 px-3 min-w-[130px] text-center">Leave Type</th>
+                        <th className="py-3.5 px-3 min-w-[120px] text-center">Leave Count Days</th>
+                        <th className="py-3.5 pl-3 pr-6 min-w-[220px]">Leave Days / Dates</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {modalConfig.items.map((item, idx) => {
+                        const from = (item.from_date || item.start_date || '').split('T')[0];
+                        const to = (item.to_date || item.end_date || '').split('T')[0];
+                        const isSpecial = item.leave_type === 'Special Leave';
+
+                        // Clean reason text: remove redundant prefix tags
+                        let cleanReason = item.reason || item.leave_reason || '—';
+                        const matchPrefix = cleanReason.match(/^\[(?:Special Leave|Short Leave|Half Day|Power Cut|Weather Condition)[^\]]*\]\s*(.*)$/i);
+                        if (matchPrefix) {
+                          cleanReason = matchPrefix[1].trim() || '—';
+                        }
+
+                        // Calculate business dates and weekday names (exclude Sat & Sun)
+                        const datesList = [];
+                        if (from) {
+                          const start = new Date(from + 'T00:00:00');
+                          const end = new Date((to || from) + 'T00:00:00');
+                          if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+                            const cur = new Date(start);
+                            while (cur <= end) {
+                              const dow = cur.getDay();
+                              if (dow !== 0 && dow !== 6) { // skip Saturdays & Sundays
+                                const y = cur.getFullYear();
+                                const m = String(cur.getMonth() + 1).padStart(2, '0');
+                                const d = String(cur.getDate()).padStart(2, '0');
+                                const dayName = cur.toLocaleDateString('en-US', { weekday: 'long' });
+                                datesList.push({ dateStr: `${y}-${m}-${d}`, dayName });
+                              }
+                              cur.setDate(cur.getDate() + 1);
+                            }
+                          }
+                        }
+
+                        return (
+                          <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors group">
+                            {/* 1. Profile Photo */}
+                            <td className="py-3.5 pl-6 pr-3 align-middle text-center">
+                              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-900 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-200 shadow-2xs overflow-hidden mx-auto">
+                                {item.photo_url ? (
+                                  <img 
+                                    src={item.photo_url} 
+                                    alt={item.employee_name || 'Employee'} 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.parentNode.textContent = item.initials || 'EP';
+                                    }}
+                                  />
+                                ) : (
+                                  <span>{item.initials || 'EP'}</span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* 2. Employee Name & Department */}
+                            <td className="py-3.5 px-3 align-middle">
+                              <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                                <span>{item.employee_name || item.name || 'Employee'}</span>
+                                {item.role === 'Admin' && (
+                                  <span className="bg-purple-100 text-purple-700 text-[9px] font-extrabold px-1.5 py-0.2 rounded">
+                                    Admin
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                {item.department || 'General'}
+                              </div>
+                            </td>
+
+                            {/* 3. Reason */}
+                            <td className="py-3.5 px-3 align-middle">
+                              <div className="text-slate-700 text-xs font-medium leading-relaxed break-words max-w-[260px]">
+                                {cleanReason}
+                              </div>
+                            </td>
+
+                            {/* 4. Leave Type */}
+                            <td className="py-3.5 px-3 align-middle text-center">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border shadow-2xs ${
+                                item.leave_type === 'Casual Leave' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                item.leave_type === 'Medical Leave' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                                item.leave_type === 'Study Leave' ? 'bg-sky-50 text-sky-700 border-sky-200' :
+                                item.leave_type === 'Special Leave' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                item.leave_type === 'Half Day' ? 'bg-amber-50 text-amber-800 border-amber-300' :
+                                item.leave_type === 'Short Leave' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                item.leave_type === 'Power Cut' ? 'bg-yellow-50 text-yellow-800 border-yellow-300' :
+                                item.leave_type === 'Weather Condition' ? 'bg-sky-50 text-sky-800 border-sky-300' :
+                                'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}>
+                                {item.leave_type}
+                              </span>
+                            </td>
+
+                            {/* 5. Leave Count Days */}
+                            <td className="py-3.5 px-3 align-middle text-center">
+                              <span className="inline-block bg-slate-100 text-slate-800 font-bold text-xs px-2.5 py-1 rounded-md border border-slate-200/80">
+                                {item.days_count} {Number(item.days_count) === 1 ? 'Day' : 'Days'}
+                              </span>
+                            </td>
+
+                            {/* 6. Leave Dates & Days */}
+                            <td className="py-3.5 pl-3 pr-6 align-middle">
+                              {isSpecial ? (
+                                <div className="space-y-1.5">
+                                  <div className="font-bold text-slate-800 text-xs">
+                                    {from && to && from !== to ? `${from} to ${to}` : (from || 'Scheduled')}
+                                  </div>
+                                  <div className="text-[11px] text-purple-700 font-semibold flex items-center gap-1">
+                                    <span>🔄 Recurring:</span>
+                                    <span>{item.day_of_week ? item.day_of_week.split(',').map(s => s.trim()).join(', ') : (item.duration || 'Weekly')}</span>
+                                  </div>
+                                  {item.next_leave_date && (
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 text-[10px] font-bold border border-purple-200/80">
+                                      <span>Next Leave:</span>
+                                      <span>{item.next_leave_date}</span>
+                                      {(() => {
+                                        const nd = new Date(item.next_leave_date + 'T00:00:00');
+                                        return !isNaN(nd.getTime()) ? `(${nd.toLocaleDateString('en-US', { weekday: 'short' })})` : '';
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (!to || from === to) ? (
+                                <div className="space-y-0.5">
+                                  <div className="font-bold text-slate-800 text-xs">{from}</div>
+                                  {datesList[0] && (
+                                    <div className="text-[11px] font-semibold text-slate-600">
+                                      {datesList[0].dayName}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="font-bold text-slate-800 text-xs">
+                                    {from} to {to}
+                                  </div>
+                                  <div className="text-[11px] text-slate-600 flex flex-wrap gap-1 font-medium">
+                                    {datesList.length <= 4 ? (
+                                      datesList.map((d, i) => (
+                                        <span key={i} className="inline-block bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px] border border-slate-200/60 font-semibold">
+                                          {d.dateStr} ({d.dayName})
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-[11px] text-slate-500 font-semibold">
+                                        Weekdays: {Array.from(new Set(datesList.map(d => d.dayName))).join(', ')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 modalConfig.items.map((item, idx) => {
@@ -798,31 +971,6 @@ export default function StatCardsGrid({
                             </span>
                           </div>
                         )}
-
-                        {modalConfig.type === 'upcoming' && (() => {
-                          const cleanDate = (item.from_date || '').split('T')[0];
-                          const cleanToDate = (item.to_date || '').split('T')[0];
-                          const dateStr = cleanDate
-                            ? (cleanDate === cleanToDate || !cleanToDate ? cleanDate : `${cleanDate} to ${cleanToDate}`)
-                            : '';
-                          let durationText = item.duration || dateStr;
-                          if (cleanDate && item.duration && !item.duration.includes(cleanDate)) {
-                            durationText = `${item.duration} (${dateStr})`;
-                          }
-                          return (
-                            <div className="flex flex-col sm:items-end gap-1">
-                              <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold px-2.5 py-0.5 rounded-md shadow-2xs">
-                                {item.leave_type}
-                              </span>
-                              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                                <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 text-[10px] font-extrabold">
-                                  ✓ Accepted
-                                </span>
-                                <span>📅 {durationText}</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
                       </div>
                     </div>
                   );
