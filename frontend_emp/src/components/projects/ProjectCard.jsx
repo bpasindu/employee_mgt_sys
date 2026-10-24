@@ -45,7 +45,7 @@ export default function ProjectCard({ project, currentUser, onViewDetails }) {
         <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 text-white text-[11px] font-bold px-4 py-1.5 flex items-center justify-between tracking-wide">
           <div className="flex items-center gap-1.5">
             <Crown className="w-3.5 h-3.5" />
-            <span>YOU ARE THE PROJECT MANAGER</span>
+            <span>YOU ARE A PROJECT MANAGER</span>
           </div>
           <span className="text-[10px] font-medium bg-amber-700/60 px-2 py-0.2 rounded-full">Scoped Admin Access</span>
         </div>
@@ -86,23 +86,38 @@ export default function ProjectCard({ project, currentUser, onViewDetails }) {
         {/* Project Manager Card */}
         <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-100 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            {project.project_manager?.photo_url ? (
-              <img 
-                src={project.project_manager.photo_url} 
-                alt={project.project_manager.name} 
-                className="w-8 h-8 rounded-full object-cover border border-amber-200 shrink-0" 
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs">
-                {project.project_manager?.initials || <Crown className="w-4 h-4" />}
-              </div>
-            )}
+            {/* PM Avatars */}
+            <div className="flex -space-x-2 shrink-0">
+              {(project.project_managers && project.project_managers.length > 0
+                ? project.project_managers
+                : (project.project_manager ? [project.project_manager] : [])
+              ).slice(0, 3).map((pm, i) => (
+                pm.photo_url ? (
+                  <img 
+                    key={pm.id || i}
+                    src={pm.photo_url} 
+                    alt={pm.name} 
+                    className="w-8 h-8 rounded-full object-cover border-2 border-white ring-1 ring-amber-300 shrink-0" 
+                  />
+                ) : (
+                  <div 
+                    key={pm.id || i}
+                    className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold border-2 border-white shadow-2xs shrink-0"
+                  >
+                    {pm.initials || <Crown className="w-3.5 h-3.5" />}
+                  </div>
+                )
+              ))}
+            </div>
             <div className="min-w-0">
               <p className="text-[10px] uppercase font-bold text-amber-700 tracking-wider flex items-center gap-1">
-                <Crown className="w-3 h-3" /> Project Manager
+                <Crown className="w-3 h-3" /> 
+                <span>{(project.project_managers?.length || 1) > 1 ? 'Project Managers' : 'Project Manager'}</span>
               </p>
               <p className="text-xs font-semibold text-slate-800 truncate">
-                {project.project_manager?.name || 'Unassigned'}
+                {project.project_managers && project.project_managers.length > 0
+                  ? project.project_managers.map(pm => pm.name).join(', ')
+                  : (project.project_manager?.name || 'Unassigned')}
               </p>
             </div>
           </div>

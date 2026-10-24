@@ -1,6 +1,32 @@
 {
   "projects": [
     {
+      "id": 5,
+      "name": "EMS",
+      "code": "PRJ-005",
+      "client_name": "",
+      "description": "PWH EMS",
+      "project_manager_id": 13,
+      "status": "In Progress",
+      "priority": "High",
+      "start_date": "2026-10-24",
+      "target_date": "2026-11-24",
+      "created_by": 5,
+      "created_at": "2026-10-24T08:45:56.275Z",
+      "updated_at": "2026-10-24T14:41:09.896Z",
+      "members": [
+        6,
+        8,
+        13,
+        5
+      ],
+      "project_manager_ids": [
+        13,
+        6,
+        5
+      ]
+    },
+    {
       "id": 4,
       "name": "E2E Automated Verification Project",
       "code": "PRJ-E2E-99",
@@ -17,6 +43,9 @@
       "members": [
         22,
         26
+      ],
+      "project_manager_ids": [
+        22
       ]
     },
     {
@@ -35,6 +64,9 @@
       "updated_at": "2026-10-16T08:59:48.343Z",
       "members": [
         16,
+        8
+      ],
+      "project_manager_ids": [
         8
       ]
     },
@@ -56,6 +88,9 @@
         8,
         16,
         24
+      ],
+      "project_manager_ids": [
+        8
       ]
     },
     {
@@ -76,6 +111,9 @@
         10,
         14,
         26
+      ],
+      "project_manager_ids": [
+        10
       ]
     }
   ],
@@ -139,6 +177,36 @@
     }
   ],
   "tasks": [
+    {
+      "id": 10,
+      "project_id": 5,
+      "target_id": null,
+      "title": "Guide",
+      "description": "",
+      "assigned_to": 5,
+      "created_by": 5,
+      "status": "In Progress",
+      "priority": "Urgent",
+      "due_date": "2026-10-24",
+      "completed_at": null,
+      "created_at": "2026-10-24T14:42:05.294Z",
+      "updated_at": "2026-10-24T14:42:05.294Z"
+    },
+    {
+      "id": 9,
+      "project_id": 5,
+      "target_id": null,
+      "title": "Migrate system into company email",
+      "description": "Migrate system to company email\n- vercel hosting\n- supabase new account and pass previous data set\n- resend email api key",
+      "assigned_to": 8,
+      "created_by": 5,
+      "status": "Pending",
+      "priority": "Urgent",
+      "due_date": "2026-10-26",
+      "completed_at": null,
+      "created_at": "2026-10-24T08:50:46.446Z",
+      "updated_at": "2026-10-24T08:50:46.446Z"
+    },
     {
       "id": 8,
       "project_id": 4,

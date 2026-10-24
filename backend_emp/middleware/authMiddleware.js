@@ -11,7 +11,7 @@ function authenticateToken(req, res, next) {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      req.user = { id: token, role: 'Admin' };
+      req.user = { id: token, role: 'Employee' };
     } else {
       req.user = user;
     }

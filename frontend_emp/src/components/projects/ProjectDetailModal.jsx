@@ -25,6 +25,7 @@ export default function ProjectDetailModal({
   onClose, 
   projectId, 
   currentUser, 
+  isEmployeeView = false,
   onOpenEditProject, 
   onOpenCreateTask, 
   onEditTask, 
@@ -46,12 +47,16 @@ export default function ProjectDetailModal({
     if (isOpen && projectId) {
       fetchProjectDetails();
     }
-  }, [isOpen, projectId]);
+  }, [isOpen, projectId, isEmployeeView]);
 
   const fetchProjectDetails = async () => {
     try {
       setLoading(true);
-      const res = await API.get(`/projects/${projectId}`);
+      const res = await API.get(`/projects/${projectId}?scope=${isEmployeeView ? 'employee' : 'admin'}`, {
+        headers: {
+          'x-view-scope': isEmployeeView ? 'employee' : 'admin'
+        }
+      });
       if (res.data) {
         setProject(res.data);
       }
@@ -64,9 +69,17 @@ export default function ProjectDetailModal({
 
   if (!isOpen) return null;
 
-  const canManage = project?.permissions?.can_manage;
-  const isManager = project?.permissions?.is_manager;
+  const isManager = Boolean(
+    project?.permissions?.is_manager ||
+    (currentUser?.id && (
+      String(project?.project_manager_id) === String(currentUser.id) ||
+      (Array.isArray(project?.project_manager_ids) && project.project_manager_ids.some(id => String(id) === String(currentUser.id))) ||
+      (Array.isArray(project?.project_managers) && project.project_managers.some(pm => String(pm.id || pm) === String(currentUser.id)))
+    ))
+  );
   const isAdmin = currentUser?.role === 'Admin';
+  // STRICT: Only designated Project Managers can create and manage tasks in employee view
+  const canManage = isEmployeeView ? isManager : (isAdmin || isManager);
 
   const handleToggleTaskStatus = async (taskId, nextStatus) => {
     try {
@@ -474,7 +487,9 @@ export default function ProjectDetailModal({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {members.map(member => {
-                      const isPM = String(project.project_manager_id) === String(member.id);
+                      const isPM = (Array.isArray(project.project_manager_ids) && project.project_manager_ids.some(id => String(id) === String(member.id))) ||
+                                   (Array.isArray(project.project_managers) && project.project_managers.some(pm => String(pm.id || pm) === String(member.id))) ||
+                                   String(project.project_manager_id) === String(member.id);
                       const memberTasks = tasks.filter(t => String(t.assigned_to) === String(member.id));
                       const memberCompleted = memberTasks.filter(t => t.status === 'Completed').length;
 
@@ -552,8 +567,12 @@ export default function ProjectDetailModal({
                     <div className="p-4 rounded-xl border border-slate-200 space-y-2">
                       <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Manager & Authority</span>
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-500">Project Manager:</span>
-                        <span className="font-bold text-slate-800">{project.project_manager?.name || 'Unassigned'}</span>
+                        <span className="text-slate-500">{(project.project_managers?.length || 1) > 1 ? 'Project Managers:' : 'Project Manager:'}</span>
+                        <span className="font-bold text-slate-800 text-right">
+                          {project.project_managers && project.project_managers.length > 0
+                            ? project.project_managers.map(pm => pm.name).join(', ')
+                            : (project.project_manager?.name || 'Unassigned')}
+                        </span>
                       </div>
                       <div className="flex justify-between py-1">
                         <span className="text-slate-500">Authority Type:</span>

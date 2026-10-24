@@ -212,10 +212,17 @@ class ProjectRepository {
             if (!membersMap[m.project_id]) membersMap[m.project_id] = [];
             membersMap[m.project_id].push(m.user_id);
           });
-          return data.map(p => ({
-            ...p,
-            members: membersMap[p.id] || []
-          }));
+          return data.map(p => {
+            const pmIds = Array.isArray(p.project_manager_ids) && p.project_manager_ids.length > 0
+              ? p.project_manager_ids
+              : (p.project_manager_id ? [p.project_manager_id] : []);
+            return {
+              ...p,
+              project_manager_ids: pmIds,
+              project_manager_id: pmIds[0] || null,
+              members: membersMap[p.id] || []
+            };
+          });
         }
       } catch (err) {
         if (this.isSchemaMissing(err)) {
@@ -229,7 +236,16 @@ class ProjectRepository {
 
     // Fallback store
     const store = this.readFallback();
-    return store.projects || [];
+    return (store.projects || []).map(p => {
+      const pmIds = Array.isArray(p.project_manager_ids) && p.project_manager_ids.length > 0
+        ? p.project_manager_ids
+        : (p.project_manager_id ? [p.project_manager_id] : []);
+      return {
+        ...p,
+        project_manager_ids: pmIds,
+        project_manager_id: pmIds[0] || null
+      };
+    });
   }
 
   async findProjectById(id) {
@@ -240,12 +256,21 @@ class ProjectRepository {
 
   async createProject(projectData, memberUserIds = []) {
     const cleanedMemberIds = Array.from(new Set(memberUserIds.map(m => parseInt(m, 10)).filter(Boolean)));
-    const pmId = projectData.project_manager_id ? parseInt(projectData.project_manager_id, 10) : null;
     
-    // Ensure PM is also in members list if specified
-    if (pmId && !cleanedMemberIds.includes(pmId)) {
-      cleanedMemberIds.push(pmId);
+    let pmIds = [];
+    if (Array.isArray(projectData.project_manager_ids)) {
+      pmIds = Array.from(new Set(projectData.project_manager_ids.map(m => parseInt(m, 10)).filter(Boolean)));
+    } else if (projectData.project_manager_id) {
+      pmIds = [parseInt(projectData.project_manager_id, 10)].filter(Boolean);
     }
+    const pmId = pmIds[0] || null;
+    
+    // Ensure all PMs are also in members list
+    pmIds.forEach(id => {
+      if (!cleanedMemberIds.includes(id)) {
+        cleanedMemberIds.push(id);
+      }
+    });
 
     if (!this.useFallback) {
       try {
@@ -281,7 +306,7 @@ class ProjectRepository {
             }));
             await supabase.from('project_members').insert(memberInserts);
           }
-          return { ...newProj, members: cleanedMemberIds };
+          return { ...newProj, project_manager_ids: pmIds, members: cleanedMemberIds };
         }
       } catch (err) {
         if (this.isSchemaMissing(err)) {
@@ -302,6 +327,7 @@ class ProjectRepository {
       code: projectData.code || `PRJ-${String(newId).padStart(3, '0')}`,
       client_name: projectData.client_name || null,
       description: projectData.description || '',
+      project_manager_ids: pmIds,
       project_manager_id: pmId,
       status: projectData.status || 'In Progress',
       priority: projectData.priority || 'Medium',
@@ -319,13 +345,24 @@ class ProjectRepository {
 
   async updateProject(id, updateData, memberUserIds = null) {
     const numId = parseInt(id, 10);
-    const pmId = updateData.project_manager_id !== undefined ? (updateData.project_manager_id ? parseInt(updateData.project_manager_id, 10) : null) : undefined;
+    
+    let pmIds = undefined;
+    if (Array.isArray(updateData.project_manager_ids)) {
+      pmIds = Array.from(new Set(updateData.project_manager_ids.map(m => parseInt(m, 10)).filter(Boolean)));
+    } else if (updateData.project_manager_id !== undefined) {
+      pmIds = updateData.project_manager_id ? [parseInt(updateData.project_manager_id, 10)].filter(Boolean) : [];
+    }
+    const pmId = pmIds !== undefined ? (pmIds[0] || null) : undefined;
 
     let cleanedMemberIds = null;
     if (memberUserIds !== null && memberUserIds !== undefined) {
       cleanedMemberIds = Array.from(new Set(memberUserIds.map(m => parseInt(m, 10)).filter(Boolean)));
-      if (pmId && !cleanedMemberIds.includes(pmId)) {
-        cleanedMemberIds.push(pmId);
+      if (pmIds) {
+        pmIds.forEach(id => {
+          if (!cleanedMemberIds.includes(id)) {
+            cleanedMemberIds.push(id);
+          }
+        });
       }
     }
 
@@ -357,6 +394,7 @@ class ProjectRepository {
             }
             updated.members = cleanedMemberIds;
           }
+          if (pmIds !== undefined) updated.project_manager_ids = pmIds;
           return updated;
         }
       } catch (err) {
@@ -380,7 +418,10 @@ class ProjectRepository {
       ...updateData,
       updated_at: new Date().toISOString()
     };
-    if (pmId !== undefined) updated.project_manager_id = pmId;
+    if (pmIds !== undefined) {
+      updated.project_manager_ids = pmIds;
+      updated.project_manager_id = pmId;
+    }
     if (cleanedMemberIds !== null) {
       updated.members = cleanedMemberIds;
     }

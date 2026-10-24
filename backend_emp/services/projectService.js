@@ -30,17 +30,19 @@ class ProjectService {
   /**
    * List all projects visible to the requesting user
    */
-  async getProjectsForUser(user) {
+  async getProjectsForUser(user, scope = null) {
     if (!user) throw new Error('Authentication required');
 
     const allProjects = await projectRepository.findAllProjects();
-    const visibleProjects = allProjects.filter(p => ProjectPolicy.canViewProject(user, p));
+    const visibleProjects = allProjects.filter(p => ProjectPolicy.canViewProject(user, p, scope));
 
     // Gather all PM and member IDs to fetch details in a single query
     const userIdsToFetch = [];
     visibleProjects.forEach(p => {
       if (p.project_manager_id) userIdsToFetch.push(p.project_manager_id);
+      if (Array.isArray(p.project_manager_ids)) userIdsToFetch.push(...p.project_manager_ids);
       if (Array.isArray(p.members)) userIdsToFetch.push(...p.members);
+      if (p.created_by) userIdsToFetch.push(p.created_by);
     });
     const userMap = await this.getUserMap(userIdsToFetch);
 
@@ -56,16 +58,23 @@ class ProjectService {
       const totalTargets = targets.length;
       const completedTargets = targets.filter(t => t.is_completed).length;
 
-      const pm = project.project_manager_id ? userMap[project.project_manager_id] || null : null;
+      const pmIds = Array.isArray(project.project_manager_ids) && project.project_manager_ids.length > 0
+        ? project.project_manager_ids
+        : (project.project_manager_id ? [project.project_manager_id] : []);
+      const pms = pmIds.map(id => userMap[id]).filter(Boolean);
+      const primaryPm = pms[0] || (project.project_manager_id ? userMap[project.project_manager_id] || null : null);
       const members = (project.members || []).map(mId => userMap[mId] || { id: mId, name: `Employee #${mId}` });
 
-      const isManager = ProjectPolicy.isSameUser(user.id, project.project_manager_id);
-      const isAdmin = user.role === 'Admin';
-      const canManage = isAdmin || isManager;
+      const isManager = ProjectPolicy.isProjectManager(user.id, project);
+      const isAdmin = user.role === 'Admin' && scope !== 'employee';
+      const canManage = isManager || isAdmin;
 
       return {
         ...project,
-        project_manager: pm,
+        project_manager_ids: pmIds,
+        project_manager_id: pmIds[0] || project.project_manager_id || null,
+        project_managers: pms,
+        project_manager: primaryPm,
         team_members: members,
         stats: {
           total_tasks: totalTasks,
@@ -78,7 +87,7 @@ class ProjectService {
         permissions: {
           can_manage: canManage,
           is_manager: isManager,
-          is_admin: isAdmin
+          is_admin: user.role === 'Admin'
         }
       };
     }));
@@ -89,7 +98,7 @@ class ProjectService {
   /**
    * Get single project with complete targets, tasks, and member lists
    */
-  async getProjectDetails(projectId, user) {
+  async getProjectDetails(projectId, user, scope = null) {
     const project = await projectRepository.findProjectById(projectId);
     if (!project) {
       const err = new Error('Project not found');
@@ -97,7 +106,7 @@ class ProjectService {
       throw err;
     }
 
-    if (!ProjectPolicy.canViewProject(user, project)) {
+    if (!ProjectPolicy.canViewProject(user, project, scope)) {
       const err = new Error('Access denied: You are not assigned to this project');
       err.status = 403;
       throw err;
@@ -109,7 +118,9 @@ class ProjectService {
     // Collect all involved user IDs
     const userIds = [];
     if (project.project_manager_id) userIds.push(project.project_manager_id);
+    if (Array.isArray(project.project_manager_ids)) userIds.push(...project.project_manager_ids);
     if (Array.isArray(project.members)) userIds.push(...project.members);
+    if (project.created_by) userIds.push(project.created_by);
     tasks.forEach(t => {
       if (t.assigned_to) userIds.push(t.assigned_to);
       if (t.created_by) userIds.push(t.created_by);
@@ -117,7 +128,11 @@ class ProjectService {
 
     const userMap = await this.getUserMap(userIds);
 
-    const pm = project.project_manager_id ? userMap[project.project_manager_id] || null : null;
+    const pmIds = Array.isArray(project.project_manager_ids) && project.project_manager_ids.length > 0
+      ? project.project_manager_ids
+      : (project.project_manager_id ? [project.project_manager_id] : []);
+    const pms = pmIds.map(id => userMap[id]).filter(Boolean);
+    const primaryPm = pms[0] || (project.project_manager_id ? userMap[project.project_manager_id] || null : null);
     const members = (project.members || []).map(mId => userMap[mId] || { id: mId, name: `Employee #${mId}` });
 
     // Enrich tasks with assignee user details
@@ -131,13 +146,16 @@ class ProjectService {
     const completedTasks = tasks.filter(t => t.status === 'Completed').length;
     const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    const isManager = ProjectPolicy.isSameUser(user.id, project.project_manager_id);
-    const isAdmin = user.role === 'Admin';
-    const canManage = isAdmin || isManager;
+    const isManager = ProjectPolicy.isProjectManager(user.id, project);
+    const isAdmin = user.role === 'Admin' && scope !== 'employee';
+    const canManage = isManager || isAdmin;
 
     return {
       ...project,
-      project_manager: pm,
+      project_manager_ids: pmIds,
+      project_manager_id: pmIds[0] || project.project_manager_id || null,
+      project_managers: pms,
+      project_manager: primaryPm,
       team_members: members,
       targets,
       tasks: enrichedTasks,
@@ -152,7 +170,7 @@ class ProjectService {
       permissions: {
         can_manage: canManage,
         is_manager: isManager,
-        is_admin: isAdmin
+        is_admin: user.role === 'Admin'
       }
     };
   }
@@ -271,12 +289,12 @@ class ProjectService {
 
   // --- TASKS ---
 
-  async createTask(projectId, taskData, user) {
+  async createTask(projectId, taskData, user, scope = null) {
     const project = await projectRepository.findProjectById(projectId);
     if (!project) throw new Error('Project not found');
 
-    if (!ProjectPolicy.canManageTasks(user, project)) {
-      const err = new Error('Access denied: Only Project Managers or Admins can add tasks');
+    if (!ProjectPolicy.canManageTasks(user, project, scope)) {
+      const err = new Error('Access denied: Only Project Managers can create tasks for this project');
       err.status = 403;
       throw err;
     }
@@ -300,12 +318,12 @@ class ProjectService {
     };
   }
 
-  async updateTask(projectId, taskId, updateData, user) {
+  async updateTask(projectId, taskId, updateData, user, scope = null) {
     const project = await projectRepository.findProjectById(projectId);
     if (!project) throw new Error('Project not found');
 
-    if (!ProjectPolicy.canManageTasks(user, project)) {
-      const err = new Error('Access denied: Only Project Managers or Admins can edit tasks');
+    if (!ProjectPolicy.canManageTasks(user, project, scope)) {
+      const err = new Error('Access denied: Only Project Managers can edit tasks for this project');
       err.status = 403;
       throw err;
     }
@@ -343,12 +361,12 @@ class ProjectService {
     };
   }
 
-  async deleteTask(projectId, taskId, user) {
+  async deleteTask(projectId, taskId, user, scope = null) {
     const project = await projectRepository.findProjectById(projectId);
     if (!project) throw new Error('Project not found');
 
-    if (!ProjectPolicy.canManageTasks(user, project)) {
-      const err = new Error('Access denied: Only Project Managers or Admins can delete tasks');
+    if (!ProjectPolicy.canManageTasks(user, project, scope)) {
+      const err = new Error('Access denied: Only Project Managers can delete tasks');
       err.status = 403;
       throw err;
     }

@@ -39,6 +39,10 @@ export default function CreateProjectModal({
 
   useEffect(() => {
     if (projectToEdit) {
+      const pmIds = Array.isArray(projectToEdit.project_manager_ids) && projectToEdit.project_manager_ids.length > 0
+        ? projectToEdit.project_manager_ids.map(String)
+        : (projectToEdit.project_manager_id ? [String(projectToEdit.project_manager_id)] : []);
+
       setFormData({
         name: projectToEdit.name || '',
         code: projectToEdit.code || '',
@@ -48,7 +52,8 @@ export default function CreateProjectModal({
         status: projectToEdit.status || 'In Progress',
         start_date: projectToEdit.start_date || new Date().toISOString().split('T')[0],
         target_date: projectToEdit.target_date || '',
-        project_manager_id: projectToEdit.project_manager_id ? String(projectToEdit.project_manager_id) : '',
+        project_manager_id: pmIds[0] || '',
+        project_manager_ids: pmIds,
         members: (projectToEdit.members || []).map(id => String(id))
       });
     } else {
@@ -62,6 +67,7 @@ export default function CreateProjectModal({
         start_date: new Date().toISOString().split('T')[0],
         target_date: '',
         project_manager_id: '',
+        project_manager_ids: [],
         members: []
       });
     }
@@ -78,32 +84,51 @@ export default function CreateProjectModal({
         ? prev.members.filter(id => id !== strId)
         : [...prev.members, strId];
 
-      // If removed member was the PM, clear the PM selection
-      let nextPm = prev.project_manager_id;
-      if (exists && prev.project_manager_id === strId) {
-        nextPm = '';
+      // If removed member was in PMs list, also remove them from PMs
+      let nextPmIds = prev.project_manager_ids;
+      if (exists && prev.project_manager_ids.includes(strId)) {
+        nextPmIds = prev.project_manager_ids.filter(id => id !== strId);
       }
 
       return {
         ...prev,
         members: nextMembers,
-        project_manager_id: nextPm
+        project_manager_ids: nextPmIds,
+        project_manager_id: nextPmIds[0] || ''
       };
     });
   };
 
-  const handleManagerSelect = (pmId) => {
+  const handleAddPm = (pmId) => {
+    if (!pmId) return;
     const strId = String(pmId);
     setFormData(prev => {
+      const nextPmIds = prev.project_manager_ids.includes(strId)
+        ? prev.project_manager_ids
+        : [...prev.project_manager_ids, strId];
+
       // Auto-include PM in members list if not already present
-      const nextMembers = (strId && !prev.members.includes(strId))
+      const nextMembers = !prev.members.includes(strId)
         ? [...prev.members, strId]
         : prev.members;
 
       return {
         ...prev,
-        project_manager_id: strId,
+        project_manager_ids: nextPmIds,
+        project_manager_id: nextPmIds[0] || '',
         members: nextMembers
+      };
+    });
+  };
+
+  const handleRemovePm = (pmId) => {
+    const strId = String(pmId);
+    setFormData(prev => {
+      const nextPmIds = prev.project_manager_ids.filter(id => id !== strId);
+      return {
+        ...prev,
+        project_manager_ids: nextPmIds,
+        project_manager_id: nextPmIds[0] || ''
       };
     });
   };
@@ -120,7 +145,8 @@ export default function CreateProjectModal({
       setError('');
       await onSubmit({
         ...formData,
-        project_manager_id: formData.project_manager_id ? parseInt(formData.project_manager_id, 10) : null,
+        project_manager_ids: formData.project_manager_ids.map(id => parseInt(id, 10)).filter(Boolean),
+        project_manager_id: formData.project_manager_ids[0] ? parseInt(formData.project_manager_ids[0], 10) : null,
         members: formData.members.map(id => parseInt(id, 10))
       });
       onClose();
@@ -296,30 +322,58 @@ export default function CreateProjectModal({
           </div>
 
           {/* PROJECT MANAGER DESIGNATION */}
-          <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-2">
+          <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
                 <Crown className="w-4 h-4 text-amber-600" />
-                <span>Appoint Project Manager (PM)</span>
+                <span>Appoint Project Managers ({formData.project_manager_ids.length})</span>
               </label>
               <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
                 Grants Scoped Admin Rights
               </span>
             </div>
             <p className="text-[11px] text-amber-800 leading-relaxed">
-              The designated team member will have administrative authority for <strong>this project</strong>, allowing them to edit details, add milestones, create tasks, and assign team members.
+              Designated team members will have administrative authority for <strong>this project</strong>, allowing them to edit details, add milestones, create tasks, and assign team members. You can appoint one or multiple project managers.
             </p>
+
+            {/* Selected PM badges */}
+            {formData.project_manager_ids.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1 pb-1">
+                {formData.project_manager_ids.map(pmId => {
+                  const emp = employees.find(e => String(e.id) === String(pmId)) || { id: pmId, name: `Employee #${pmId}` };
+                  return (
+                    <div key={pmId} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-xs font-bold border border-amber-300 shadow-2xs">
+                      <Crown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>{emp.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePm(pmId)}
+                        className="text-amber-700 hover:text-rose-600 ml-1 p-0.5 rounded-md hover:bg-amber-200 transition-colors cursor-pointer"
+                        title="Remove Project Manager role"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <select
-              value={formData.project_manager_id}
-              onChange={(e) => handleManagerSelect(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-sm font-semibold rounded-xl border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 bg-white text-slate-900"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) handleAddPm(e.target.value);
+              }}
+              className="w-full px-3.5 py-2.5 text-sm font-semibold rounded-xl border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 bg-white text-slate-900 cursor-pointer"
             >
-              <option value="">-- Select Project Manager --</option>
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.name} ({emp.department || 'Employee'}) - {emp.email}
-                </option>
-              ))}
+              <option value="">+ Click to appoint Project Manager...</option>
+              {employees
+                .filter(emp => !formData.project_manager_ids.includes(String(emp.id)))
+                .map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} ({emp.department || 'Employee'}) - {emp.email}
+                  </option>
+                ))}
             </select>
           </div>
 

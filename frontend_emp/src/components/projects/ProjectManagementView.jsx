@@ -20,7 +20,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-export default function ProjectManagementView({ currentUser, allEmployees = [] }) {
+export default function ProjectManagementView({ currentUser, allEmployees = [], isEmployeeView = false }) {
   const [projects, setProjects] = useState([]);
   const [myTasks, setMyTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +54,7 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
     } else {
       setEmployeeList(allEmployees);
     }
-  }, [currentUser, allEmployees]);
+  }, [currentUser, allEmployees, isEmployeeView]);
 
   const fetchEmployees = async () => {
     try {
@@ -70,7 +70,13 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const res = await API.get('/projects');
+      const res = await API.get(`/projects?user_id=${currentUser?.id || ''}&scope=${isEmployeeView ? 'employee' : 'admin'}`, {
+        headers: {
+          'x-user-id': currentUser?.id ? String(currentUser.id) : '',
+          'x-user-role': isEmployeeView ? 'Employee' : (currentUser?.role || ''),
+          'x-view-scope': isEmployeeView ? 'employee' : 'admin'
+        }
+      });
       if (res.data) {
         setProjects(Array.isArray(res.data) ? res.data : []);
       }
@@ -83,7 +89,12 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
 
   const fetchMyTasks = async () => {
     try {
-      const res = await API.get('/projects/my-tasks');
+      const res = await API.get(`/projects/my-tasks?user_id=${currentUser?.id || ''}`, {
+        headers: {
+          'x-user-id': currentUser?.id ? String(currentUser.id) : '',
+          'x-user-role': currentUser?.role || ''
+        }
+      });
       if (res.data) {
         setMyTasks(Array.isArray(res.data) ? res.data : []);
       }
@@ -149,14 +160,33 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
     }
   };
 
+  // Employee visibility check:
+  // In Admin dashboard, Admins see all projects.
+  // In Employee view, users (including Admins viewing in employee mode) only see projects assigned to them (as Project Manager or Team Member).
+  const isProjectVisibleToUser = (p) => {
+    if (isAdmin && !isEmployeeView) return true;
+    const myId = currentUser?.id;
+    if (!myId) return false;
+
+    const isPm = String(p.project_manager_id) === String(myId) ||
+      (Array.isArray(p.project_manager_ids) && p.project_manager_ids.some(id => String(id) === String(myId))) ||
+      (Array.isArray(p.project_managers) && p.project_managers.some(pm => String(pm.id || pm) === String(myId)));
+    const isMember = (Array.isArray(p.members) && p.members.some(id => String(id) === String(myId))) ||
+      (Array.isArray(p.team_members) && p.team_members.some(m => String(m.id || m) === String(myId)));
+
+    return isPm || isMember;
+  };
+
+  const visibleProjects = projects.filter(isProjectVisibleToUser);
+
   // Computed metrics
-  const totalProjectsCount = projects.length;
-  const inProgressProjectsCount = projects.filter(p => p.status === 'In Progress').length;
+  const totalProjectsCount = visibleProjects.length;
+  const inProgressProjectsCount = visibleProjects.filter(p => p.status === 'In Progress').length;
   const myCompletedTasksCount = myTasks.filter(t => t.status === 'Completed').length;
-  const managedByMeCount = projects.filter(p => p.permissions?.is_manager).length;
+  const managedByMeCount = visibleProjects.filter(p => p.permissions?.is_manager).length;
 
   // Filtered projects
-  const filteredProjects = projects.filter(p => {
+  const filteredProjects = visibleProjects.filter(p => {
     const matchesSearch = !searchTerm.trim() ||
       (p.name && p.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (p.client_name && p.client_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -189,7 +219,7 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
           </p>
         </div>
 
-        {isAdmin && (
+        {isAdmin && !isEmployeeView && (
           <button
             type="button"
             onClick={() => {
@@ -406,17 +436,6 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
         projectToEdit={projectToEdit}
       />
 
-      <CreateTaskModal
-        isOpen={isCreateTaskOpen}
-        onClose={() => {
-          setIsCreateTaskOpen(false);
-          setTaskToEdit(null);
-        }}
-        onSubmit={handleSaveTask}
-        project={taskProjectContext}
-        taskToEdit={taskToEdit}
-      />
-
       <ProjectDetailModal
         isOpen={isDetailOpen}
         onClose={() => {
@@ -425,6 +444,7 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
         }}
         projectId={selectedProjectId}
         currentUser={currentUser}
+        isEmployeeView={isEmployeeView}
         onOpenEditProject={(proj) => {
           setIsDetailOpen(false);
           handleOpenEditProject(proj);
@@ -435,6 +455,17 @@ export default function ProjectManagementView({ currentUser, allEmployees = [] }
           fetchProjects();
           fetchMyTasks();
         }}
+      />
+
+      <CreateTaskModal
+        isOpen={isCreateTaskOpen}
+        onClose={() => {
+          setIsCreateTaskOpen(false);
+          setTaskToEdit(null);
+        }}
+        onSubmit={handleSaveTask}
+        project={taskProjectContext}
+        taskToEdit={taskToEdit}
       />
     </div>
   );

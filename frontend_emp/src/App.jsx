@@ -491,7 +491,11 @@ export default function App() {
             )}
 
             {activeTab === 'projects' && (
-              <ProjectManagementView currentUser={currentUser || adminUser} allEmployees={allEmployees} />
+              <ProjectManagementView 
+                currentUser={currentUser || adminUser} 
+                allEmployees={allEmployees} 
+                isEmployeeView={false} 
+              />
             )}
 
             {activeTab === 'all-employees' && <AdminAllEmployeesView employees={allEmployees} onSelectEmployee={handleSelectEmployee} />}
@@ -669,7 +673,11 @@ export default function App() {
           })()}
 
           {activeTab === 'projects' && (
-            <ProjectManagementView currentUser={currentUser || user} allEmployees={allEmployees} />
+            <ProjectManagementView 
+              currentUser={currentUser || user} 
+              allEmployees={allEmployees} 
+              isEmployeeView={true} 
+            />
           )}
 
           {activeTab === 'work-history' && <WorkHistoryView userId={currentUser?.id} />}

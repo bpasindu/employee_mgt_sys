@@ -85,7 +85,7 @@ export default function CreateTaskModal({
   const targets = project.targets || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-slate-200 flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
