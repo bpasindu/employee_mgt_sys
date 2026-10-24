@@ -11,7 +11,8 @@ import {
   LogOut, 
   X,
   User,
-  Database
+  Database,
+  FolderKanban
 } from 'lucide-react';
 import API from '../../api';
 
@@ -71,6 +72,18 @@ export default function AdminSidebar({ activeTab, setActiveTab, adminUser, onLog
             >
               <LayoutDashboard className="w-4 h-4" />
               <span>Dashboard</span>
+            </button>
+
+            <button
+              onClick={() => handleNavClick('projects')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 mt-1 rounded-xl text-sm font-medium transition-all ${
+                activeTab === 'projects'
+                  ? 'bg-[#152a4a] text-white shadow-sm border border-slate-700/60'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#0c1f3a]'
+              }`}
+            >
+              <FolderKanban className="w-4 h-4" />
+              <span>Projects & Tasks</span>
             </button>
           </div>
 
